@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [devMode, setDevMode] = useState(() => localStorage.getItem('devMode') === 'true')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,8 +39,14 @@ export function AuthProvider({ children }) {
     if (user) await fetchProfile(user.id)
   }
 
+  function toggleDevMode() {
+    const next = !devMode
+    setDevMode(next)
+    localStorage.setItem('devMode', String(next))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, refreshProfile, isDevMode: devMode, toggleDevMode, isAdmin: profile?.is_admin ?? false }}>
       {children}
     </AuthContext.Provider>
   )

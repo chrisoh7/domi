@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  --color-cmu-red: #C41230;
+  --color-cmu-dark: #1A1A2E;
+  --color-cmu-gold: #F5A623;
   --font-sans: "DM Sans", system-ui, sans-serif;
 }
 
