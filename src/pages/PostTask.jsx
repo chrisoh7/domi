@@ -270,7 +270,7 @@ export default function PostTask() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             {step === 0 ? 'Back to Doum' : 'Back'}
           </Button>
-          <h1 className="text-2xl font-bold">Ask for Help</h1>
+          <h1 className="text-2xl font-bold">Ask for Doum</h1>
           <p className="text-muted-foreground mt-2">Get help from fellow students</p>
         </div>
 

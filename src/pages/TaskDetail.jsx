@@ -728,7 +728,7 @@ export default function TaskDetail() {
                       <DialogHeader>
                         <DialogTitle>Task Chat</DialogTitle>
                       </DialogHeader>
-                      <TaskChat taskId={id} posterId={task.poster_id} runnerId={task.runner_id} />
+                      <TaskChat taskId={id} posterId={task.poster_id} runnerId={task.runner_id} taskStatus={task.status} />
                     </DialogContent>
                   </Dialog>
                 )}

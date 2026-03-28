@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Send, MessageSquare } from 'lucide-react'
 
-export default function TaskChat({ taskId, posterId, runnerId }) {
+export default function TaskChat({ taskId, posterId, runnerId, taskStatus }) {
   const { user, profile } = useAuth()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -11,6 +11,7 @@ export default function TaskChat({ taskId, posterId, runnerId }) {
   const bottomRef = useRef(null)
 
   const canChat = user?.id === posterId || user?.id === runnerId
+  const isClosed = taskStatus === 'completed' || taskStatus === 'disputed'
 
   useEffect(() => {
     fetchMessages()
@@ -85,17 +86,21 @@ export default function TaskChat({ taskId, posterId, runnerId }) {
         <div ref={bottomRef} />
       </div>
 
-      {canChat ? (
+      {isClosed ? (
+        <p className="text-xs text-gray-400 text-center py-2.5 border-t border-gray-200">
+          Chat is closed — this doum is {taskStatus}.
+        </p>
+      ) : canChat ? (
         <form onSubmit={sendMessage} className="border-t border-gray-200 p-2.5 flex gap-2">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Message..."
-            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]"
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <button type="submit" disabled={sending || !input.trim()}
-            className="p-2 bg-[#C41230] text-white rounded-lg hover:bg-[#a00f28] disabled:opacity-50 transition-colors">
+            className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
             <Send size={14} />
           </button>
         </form>
