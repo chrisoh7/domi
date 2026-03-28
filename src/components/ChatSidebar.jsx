@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ArrowLeft, Send, MessageSquare } from 'lucide-react'
+import { X, ArrowLeft, Send, MessageSquare, ImageIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChat } from '../contexts/ChatContext'
@@ -30,6 +30,7 @@ export default function ChatSidebar() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
+  const imageInputRef = useRef(null)
 
   const activeConv = conversations.find(c => c.id === activeTaskId)
   const isClosed = activeConv && (activeConv.status === 'completed' || activeConv.status === 'disputed')
@@ -131,6 +132,26 @@ export default function ChatSidebar() {
     markRead(activeTaskId)
   }
 
+  async function sendImage(e) {
+    const file = e.target.files?.[0]
+    if (!file || !activeTaskId || isClosed) return
+    setSending(true)
+    const ext = file.name.split('.').pop()
+    const path = `chat/${user.id}_${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('messages').insert({
+        task_id: activeTaskId,
+        sender_id: user.id,
+        body: `[img]${publicUrl}`,
+      })
+      markRead(activeTaskId)
+    }
+    setSending(false)
+    e.target.value = ''
+  }
+
   function goBack() {
     setActiveTaskId(null)
     setMessages([])
@@ -155,14 +176,14 @@ export default function ChatSidebar() {
       {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 md:hidden"
+          className="fixed inset-0 z-40 bg-black/20 md:bg-transparent"
           onClick={close}
         />
       )}
 
       {/* Sidebar panel */}
       <div
-        className={`fixed top-14 right-0 h-[calc(100vh-3.5rem)] w-80 bg-white border-l border-gray-200 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-14 right-0 h-[calc(100vh-3.5rem)] w-80 bg-white border-l border-gray-200 shadow-2xl z-[51] flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -210,14 +231,24 @@ export default function ChatSidebar() {
                 const isMe = msg.sender_id === user?.id
                 return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}>
-                      {!isMe && (
+                    <div className={`max-w-[80%] rounded-2xl overflow-hidden ${isMe ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'} ${msg.body.startsWith('[img]') ? 'p-0' : 'px-3 py-2'}`}>
+                      {!isMe && !msg.body.startsWith('[img]') && (
                         <p className="text-[10px] font-semibold mb-0.5 opacity-60">{msg.profiles?.name ?? 'User'}</p>
                       )}
-                      <p className="text-sm leading-snug break-words">{msg.body}</p>
-                      <p className={`text-[10px] mt-0.5 ${isMe ? 'opacity-50' : 'text-gray-400'}`}>
-                        {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                      </p>
+                      {msg.body.startsWith('[img]') ? (
+                        <img
+                          src={msg.body.slice(5)}
+                          alt="shared image"
+                          className="max-w-[220px] max-h-[260px] object-cover rounded-2xl"
+                        />
+                      ) : (
+                        <p className="text-sm leading-snug break-words">{msg.body}</p>
+                      )}
+                      {!msg.body.startsWith('[img]') && (
+                        <p className={`text-[10px] mt-0.5 ${isMe ? 'opacity-50' : 'text-gray-400'}`}>
+                          {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )
@@ -231,6 +262,22 @@ export default function ChatSidebar() {
               </div>
             ) : (
               <form onSubmit={sendMessage} className="border-t border-gray-100 p-2.5 flex gap-2 flex-shrink-0">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={sendImage}
+                />
+                <button
+                  type="button"
+                  disabled={sending}
+                  onClick={() => imageInputRef.current?.click()}
+                  className="p-2 rounded-xl text-gray-400 hover:text-primary hover:bg-gray-100 disabled:opacity-50 transition-colors flex-shrink-0"
+                  title="Send image"
+                >
+                  <ImageIcon size={16} />
+                </button>
                 <input
                   type="text"
                   value={input}

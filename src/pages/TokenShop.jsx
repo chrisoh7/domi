@@ -127,7 +127,7 @@ export default function TokenShop() {
             <h2 className="text-xl font-bold">Tokens Added!</h2>
             <p className="text-muted-foreground mt-1">+{pack.tokens} tokens added to your balance.</p>
             <div className="mt-4 text-3xl font-bold text-amber-500 flex items-center justify-center gap-2">
-              🪙 {profile?.token_balance}
+              <Coins size={28} className="text-amber-500" /> {profile?.token_balance}
             </div>
             <Button onClick={() => setStep('select')} className="mt-6 bg-primary">
               Buy More
@@ -229,7 +229,7 @@ export default function TokenShop() {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Your Balance</p>
               <div className="flex items-center gap-2">
-                <span className="text-3xl">🪙</span>
+                <Coins size={30} className="text-amber-500" />
                 <span className="text-3xl font-semibold">
                   {isDevMode ? '∞' : (profile?.token_balance ?? 0).toLocaleString()}
                 </span>
@@ -292,7 +292,7 @@ export default function TokenShop() {
                     </Badge>
                   )}
                   <div className="text-center">
-                    <div className="text-4xl mb-3">🪙</div>
+                    <div className="flex justify-center mb-3"><Coins size={40} className="text-amber-500" /></div>
                     <p className="text-3xl font-semibold mb-1">{p.tokens.toLocaleString()}</p>
                     <p className="text-sm text-muted-foreground mb-4">tokens</p>
                     <div className="mb-4">
@@ -372,7 +372,7 @@ export default function TokenShop() {
                     <div>
                       <Label htmlFor="redeem-tokens">Tokens to Redeem</Label>
                       <div className="relative mt-2">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">🪙</span>
+                        <Coins size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
                         <Input
                           id="redeem-tokens"
                           type="number"
@@ -390,7 +390,7 @@ export default function TokenShop() {
                     <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-muted-foreground">Token Value:</span>
-                        <span className="font-semibold">🪙 {redeemTokensNum.toLocaleString()}</span>
+                        <span className="font-semibold flex items-center gap-1"><Coins size={14} className="text-amber-500" />{redeemTokensNum.toLocaleString()}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Gift Card Value:</span>

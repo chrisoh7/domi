@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Clock, Star, Flag, DollarSign, Package, Users, Handshake } from 'lucide-react'
+import { MapPin, Clock, Star, Flag, DollarSign, Package, Users, Handshake, Coins } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/utils'
@@ -62,7 +62,7 @@ export default function TaskCard({ task, currentUserId }) {
           <div className="text-3xl">{categoryEmoji}</div>
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-full">
-              <span className="text-lg">🪙</span>
+              <Coins size={15} className="text-amber-600" />
               <span className="font-semibold text-amber-900">{task.token_offer}</span>
             </div>
             {task.cash_offer > 0 && (

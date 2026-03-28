@@ -339,11 +339,11 @@ export default function TaskDetail() {
   async function uploadCompletionPhoto(file) {
     setPhotoUploading(true)
     const ext = file.name.split('.').pop()
-    const path = `${id}/${Date.now()}.${ext}`
-    const { error: uploadErr } = await supabase.storage.from('completion_photos').upload(path, file, { upsert: true })
+    const path = `completion/${id}_${Date.now()}.${ext}`
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
     setPhotoUploading(false)
     if (uploadErr) { setError(uploadErr.message); return null }
-    const { data: { publicUrl } } = supabase.storage.from('completion_photos').getPublicUrl(path)
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
     return publicUrl
   }
 
