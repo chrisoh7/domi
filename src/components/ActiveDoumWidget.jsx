@@ -131,7 +131,10 @@ export default function ActiveDoumWidget() {
     }
     load()
 
-    // subscribe to changes on tasks I'm involved in
+    // polling fallback — catches updates even if realtime isn't enabled on the table
+    const poll = setInterval(load, 15_000)
+
+    // realtime for instant updates when available
     const subPoster = supabase
       .channel(`widget-poster-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks',
@@ -144,6 +147,7 @@ export default function ActiveDoumWidget() {
       .subscribe()
 
     return () => {
+      clearInterval(poll)
       supabase.removeChannel(subPoster)
       supabase.removeChannel(subRunner)
     }

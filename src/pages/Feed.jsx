@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import TaskCard from '../components/TaskCard'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X, ChevronRight } from 'lucide-react'
 import { haversineMeters } from '../lib/utils'
 import { Button } from '../components/ui/button'
 import {
@@ -51,6 +51,8 @@ export default function Feed() {
   const [userLat, setUserLat] = useState(null)
   const [userLng, setUserLng] = useState(null)
 
+  const laneRefs = useRef({})
+
   const isFiltered =
     filters.search || filters.category !== 'All' || filters.minTokens ||
     filters.maxTokens || filters.maxMinutes || filters.maxDistanceKm ||
@@ -62,7 +64,21 @@ export default function Feed() {
       ({ coords }) => { setUserLat(coords.latitude); setUserLng(coords.longitude) },
       () => {}
     )
-  }, [filters.category])
+
+    // polling fallback
+    const poll = setInterval(fetchTasks, 30_000)
+
+    // realtime for instant updates
+    const sub = supabase
+      .channel('feed-tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
+      .subscribe()
+
+    return () => {
+      clearInterval(poll)
+      supabase.removeChannel(sub)
+    }
+  }, [filters.category]) // eslint-disable-line
 
   async function fetchTasks() {
     setLoading(true)
@@ -115,6 +131,59 @@ export default function Feed() {
           return new Date(b.created_at) - new Date(a.created_at)
       }
     })
+
+  // ── Dynamic lanes ────────────────────────────────────────────────────────────
+  const lanes = useMemo(() => {
+    if (displayed.length === 0) return []
+    const result = []
+
+    const boosted = displayed.filter(t => t.boosted)
+    if (boosted.length >= 1)
+      result.push({ id: 'boosted', emoji: '🚀', label: 'BOOSTED', tasks: boosted })
+
+    if (userLat != null) {
+      const nearby = displayed
+        .filter(t => t.location_lat)
+        .sort((a, b) =>
+          haversineMeters(userLat, userLng, a.location_lat, a.location_lng) -
+          haversineMeters(userLat, userLng, b.location_lat, b.location_lng)
+        )
+        .slice(0, 10)
+      if (nearby.length >= 2)
+        result.push({ id: 'nearby', emoji: '📍', label: 'HAPPENING NEARBY', tasks: nearby })
+    }
+
+    const now = Date.now()
+    const soon = displayed
+      .filter(t => t.deadline_at && new Date(t.deadline_at) - now < 48 * 3600 * 1000 && new Date(t.deadline_at) > now)
+      .sort((a, b) => new Date(a.deadline_at) - new Date(b.deadline_at))
+    if (soon.length >= 2)
+      result.push({ id: 'soon', emoji: '⏰', label: 'CLOSING SOON', sublabel: 'deadline within 48h', tasks: soon })
+
+    const quick = displayed
+      .filter(t => t.est_minutes && t.est_minutes <= 30)
+      .sort((a, b) => a.est_minutes - b.est_minutes)
+    if (quick.length >= 2)
+      result.push({ id: 'quick', emoji: '⚡', label: 'QUICK WINS', sublabel: 'under 30 min', tasks: quick })
+
+    const topRewards = [...displayed]
+      .sort((a, b) => (b.token_offer + (b.cash_offer || 0)) - (a.token_offer + (a.cash_offer || 0)))
+      .slice(0, 10)
+    if (topRewards.length >= 2)
+      result.push({ id: 'top', emoji: '💰', label: 'TOP REWARDS', tasks: topRewards })
+
+    CATEGORIES.filter(c => c.id !== 'All').forEach(cat => {
+      const tasks = displayed.filter(t => t.category === cat.id)
+      if (tasks.length > 0)
+        result.push({ id: cat.id, emoji: cat.emoji, label: cat.id, tasks, isCategory: true })
+    })
+
+    return result
+  }, [displayed, userLat, userLng])
+
+  function scrollLane(id) {
+    laneRefs.current[id]?.scrollBy({ left: 320, behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-screen py-8">
@@ -223,14 +292,14 @@ export default function Feed() {
           ))}
         </div>
 
-        {/* Results count */}
-        {!loading && (
+        {/* Results count (filtered/single-category mode only) */}
+        {!loading && filters.category !== 'All' && (
           <p className="text-xs text-muted-foreground mb-3">
             {displayed.length} doum{displayed.length !== 1 ? 's' : ''} found
           </p>
         )}
 
-        {/* Task grid / states */}
+        {/* Task content */}
         {loading ? (
           <div className="flex justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary" />
@@ -246,16 +315,58 @@ export default function Feed() {
             </p>
             <div className="flex items-center justify-center gap-3">
               {isFiltered && (
-                <Button variant="outline" onClick={clearFilters}>
-                  Clear filters
-                </Button>
+                <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
               )}
               <Button asChild className="bg-primary hover:bg-primary/90">
                 <Link to="/post">Request Doum</Link>
               </Button>
             </div>
           </div>
+        ) : filters.category === 'All' ? (
+          /* ── Lane view ── */
+          <div className="space-y-10">
+            {lanes.map(lane => (
+              <div key={lane.id}>
+                {/* Lane header */}
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-base font-semibold">{lane.label}</h2>
+                  {lane.sublabel && (
+                    <span className="text-xs text-muted-foreground">{lane.sublabel}</span>
+                  )}
+                  {lane.isCategory && (
+                    <button
+                      onClick={() => set('category', lane.id)}
+                      className="text-xs text-primary font-medium hover:underline ml-1"
+                    >
+                      See all
+                    </button>
+                  )}
+                  <span className="text-xs text-muted-foreground ml-0.5">· {lane.tasks.length}</span>
+                  {/* Scroll button */}
+                  <button
+                    onClick={() => scrollLane(lane.id)}
+                    className="ml-auto p-1.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors flex-shrink-0"
+                    title="Scroll right"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+                {/* Scrollable row */}
+                <div
+                  ref={el => { laneRefs.current[lane.id] = el }}
+                  className="flex gap-4 overflow-x-auto pb-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {lane.tasks.map(task => (
+                    <div key={task.id} className="flex-shrink-0 w-72">
+                      <TaskCard task={task} currentUserId={user?.id} userLat={userLat} userLng={userLng} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          /* ── Grid view (single category selected) ── */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
             {displayed.map(task => (
               <TaskCard key={task.id} task={task} currentUserId={user?.id} userLat={userLat} userLng={userLng} />

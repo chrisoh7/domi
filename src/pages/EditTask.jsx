@@ -146,7 +146,7 @@ function newStep() {
 
 export default function EditTask() {
   const { id } = useParams()
-  const { user, profile } = useAuth()
+  const { user, profile, isDevMode } = useAuth()
   const navigate = useNavigate()
 
   const [loadingTask, setLoadingTask] = useState(true)
@@ -176,8 +176,8 @@ export default function EditTask() {
     async function loadTask() {
       const { data, error: err } = await supabase.from('tasks').select('*').eq('id', id).single()
       if (err || !data) { navigate(`/task/${id}`); return }
-      if (data.poster_id !== user?.id) { navigate(`/task/${id}`); return }
-      if (data.status !== 'open') { navigate(`/task/${id}`); return }
+      if (!isDevMode && data.poster_id !== user?.id) { navigate(`/task/${id}`); return }
+      if (!isDevMode && data.status !== 'open') { navigate(`/task/${id}`); return }
 
       setTitle(data.title)
       setDescription(data.description || '')

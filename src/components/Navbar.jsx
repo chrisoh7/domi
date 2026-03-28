@@ -243,7 +243,7 @@ export default function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                  <Avatar className="w-8 h-8">
+                  <Avatar className="w-8 h-8 ring-2 ring-primary ring-offset-1">
                     <AvatarImage src={profile?.avatar_url} alt={profile?.full_name ?? 'User'} />
                     <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
                       {profile?.name?.[0]?.toUpperCase() ?? '?'}

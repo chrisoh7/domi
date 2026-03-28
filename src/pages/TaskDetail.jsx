@@ -498,7 +498,7 @@ export default function TaskDetail() {
                   <div className="flex items-start justify-between gap-2">
                     <h1 className="text-2xl font-bold leading-snug">{task.title}</h1>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      {isPoster && task.status === 'open' && (
+                      {(isPoster && task.status === 'open' || isDevMode) && (
                         <Link to={`/task/${id}/edit`} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors" title="Edit task">
                           <Pencil size={15} />
                         </Link>

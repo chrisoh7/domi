@@ -28,10 +28,10 @@ export default function WelcomeBanner() {
     return (
       <button
         onClick={() => setVisible(true)}
-        className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500 text-white text-xs font-semibold shadow-lg hover:bg-sky-600 transition-colors"
+        className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-sky-500 text-white text-sm font-semibold shadow-lg hover:bg-sky-600 transition-colors"
         title="Show intro banner"
       >
-        <BookOpen size={13} />
+        <BookOpen size={15} />
         What is domi?
       </button>
     )
