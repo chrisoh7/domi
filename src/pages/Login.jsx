@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { Card } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 
 export default function Login() {
   const [mode, setMode] = useState('login') // 'login' | 'signup'
@@ -57,112 +62,138 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold">
-            <span className="text-[#C41230]">Domi</span>
-          </h1>
-          <p className="text-gray-500 mt-1 text-sm">CMU's peer-to-peer errand marketplace</p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="flex rounded-lg bg-gray-100 p-1 mb-6">
-            {['login', 'signup'].map((m) => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setError('') }}
-                className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
-                  mode === m ? 'bg-white shadow text-gray-900' : 'text-gray-500'
-                }`}
-              >
-                {m === 'login' ? 'Sign In' : 'Sign Up'}
-              </button>
-            ))}
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md">
+        <Card className="p-8">
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-2xl mb-3">
+              👋
+            </div>
+            <h1 className="text-2xl font-bold text-center">Domi</h1>
+            <p className="text-muted-foreground text-center text-sm mt-1">CMU's peer-to-peer errand marketplace</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Alex Chen"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230] focus:border-transparent"
-                />
-              </div>
-            )}
+          {/* Mode toggle */}
+          <Tabs value={mode} onValueChange={(v) => { setMode(v); setError('') }} className="mb-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700">Andrew Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="andrewid@andrew.cmu.edu"
-                required
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230] focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-700">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230] focus:border-transparent"
-              />
-            </div>
-
-            {mode === 'signup' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Year</label>
-                  <select
-                    value={year}
-                    onChange={e => setYear(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230] bg-white"
-                  >
-                    <option value="">Optional</option>
-                    {['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'].map(y => (
-                      <option key={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Major</label>
-                  <input
-                    type="text"
-                    value={major}
-                    onChange={e => setMajor(e.target.value)}
-                    placeholder="CS"
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]"
+            {/* Sign In */}
+            <TabsContent value="login">
+              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                <div className="space-y-1">
+                  <Label htmlFor="login-email">Andrew Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="andrewid@andrew.cmu.edu"
+                    required
                   />
                 </div>
-              </div>
-            )}
+                <div className="space-y-1">
+                  <Label htmlFor="login-password">Password</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                {error && (
+                  <div className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
+                    {error}
+                  </div>
+                )}
+                <Button type="submit" disabled={loading} className="w-full bg-primary">
+                  {loading ? 'Loading...' : 'Sign In'}
+                </Button>
+              </form>
+            </TabsContent>
 
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-            )}
+            {/* Sign Up */}
+            <TabsContent value="signup">
+              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                <div className="space-y-1">
+                  <Label htmlFor="signup-name">Full Name</Label>
+                  <Input
+                    id="signup-name"
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Alex Chen"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="signup-email">Andrew Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="andrewid@andrew.cmu.edu"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="signup-year">Year</Label>
+                    <select
+                      id="signup-year"
+                      value={year}
+                      onChange={e => setYear(e.target.value)}
+                      className="mt-0 w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Optional</option>
+                      {['Freshman', 'Sophomore', 'Junior', 'Senior', 'Grad'].map(y => (
+                        <option key={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="signup-major">Major</Label>
+                    <Input
+                      id="signup-major"
+                      type="text"
+                      value={major}
+                      onChange={e => setMajor(e.target.value)}
+                      placeholder="CS"
+                    />
+                  </div>
+                </div>
+                {error && (
+                  <div className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
+                    {error}
+                  </div>
+                )}
+                <Button type="submit" disabled={loading} className="w-full bg-primary">
+                  {loading ? 'Loading...' : 'Create Account (+10 tokens)'}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </Card>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-[#C41230] text-white rounded-lg font-semibold text-sm hover:bg-[#a00f28] transition-colors disabled:opacity-60"
-            >
-              {loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account (+10 tokens)'}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-xs text-gray-400 mt-4">
+        <p className="text-center text-xs text-muted-foreground mt-4">
           For demo: use any @andrew.cmu.edu email
         </p>
       </div>

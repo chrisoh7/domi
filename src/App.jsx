@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
@@ -53,6 +54,7 @@ export default function App() {
             <ProtectedRoute><Layout><AdminQueue /></Layout></ProtectedRoute>
           } />
         </Routes>
+        <Toaster richColors position="top-right" />
       </AuthProvider>
     </BrowserRouter>
   )
