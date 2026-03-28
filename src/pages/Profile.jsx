@@ -2,14 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, TrendingUp, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2 } from 'lucide-react'
+import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { timeAgo } from '../lib/utils'
-import { Card, CardContent } from '../components/ui/card'
+import { Card } from '../components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Badge } from '../components/ui/badge'
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { useSavedPlaces, PRESET_DEFS } from '../hooks/useSavedPlaces'
+import { useSavedPlaces } from '../hooks/useSavedPlaces'
 
 const CAT_META = {
   'Errands & Pickup':    { emoji: '🛍️', color: 'bg-orange-400' },
@@ -19,7 +19,6 @@ const CAT_META = {
   'Fitness & Wellness':  { emoji: '🏋️', color: 'bg-green-500' },
   'Other':               { emoji: '✨', color: 'bg-gray-400' },
 }
-const ALL_CATS = Object.keys(CAT_META)
 
 const BADGES = [
   { id: 'heavy_lifter',  emoji: '💪', label: 'Heavy Lifter',  desc: '3+ Moving tasks',           check: tasks => tasks.filter(t => t.category === 'Moving').length >= 3 },
@@ -39,7 +38,6 @@ export default function Profile() {
   const [completedTasks, setCompletedTasks] = useState([])
   const [ratings, setRatings] = useState([])
   const [ledger, setLedger] = useState([])
-  const [tab, setTab] = useState('posted')
   const [loading, setLoading] = useState(true)
   const [avatarSaving, setAvatarSaving] = useState(false)
   const fileInputRef = useRef(null)
@@ -58,6 +56,8 @@ export default function Profile() {
   const [newCustomResults, setNewCustomResults] = useState([])
   const [newCustomCoords, setNewCustomCoords] = useState(null)
   const [showPlaces, setShowPlaces] = useState(false)
+  const [showRatings, setShowRatings] = useState(false)
+  const [showWallet, setShowWallet] = useState(false)
 
   useEffect(() => {
     if (profileId) loadProfile()
@@ -138,14 +138,6 @@ export default function Profile() {
 
   const earnedBadges = BADGES.filter(b => b.check(completedTasks))
 
-  const tabs = [
-    { key: 'posted',    label: 'Posted',    icon: ListTodo },
-    { key: 'completed', label: 'Completed', icon: CheckCircle },
-    { key: 'ratings',   label: 'Ratings',   icon: Star },
-    { key: 'trends',    label: 'Trends',    icon: TrendingUp },
-    ...(isOwn ? [{ key: 'wallet', label: 'Wallet', icon: Coins }] : []),
-  ]
-
   return (
     <div className="min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -209,7 +201,7 @@ export default function Profile() {
                   </span>
                   <span className="text-sm">({ratings.length} ratings)</span>
                 </div>
-                <span className="text-sm text-muted-foreground">{completedTasks.length} doums completed</span>
+                <span className="text-sm text-muted-foreground">{postedTasks.length} requested · {completedTasks.length} served</span>
 
                 {profile.reputation_score !== null && profile.reputation_score < 3.5 && (
                   <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
@@ -421,204 +413,117 @@ export default function Profile() {
         </Card>
 
         {/* Stats grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <Card className="p-4 border-2 border-amber-200">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <Coins size={13} className="text-amber-500" />
-              Token Balance
-            </p>
-            <p className="text-2xl font-bold text-amber-500">{profile.token_balance ?? 0}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {isOwn && (
+            <button onClick={() => setShowWallet(true)} className="text-left w-full">
+              <Card className="p-4 border-2 border-amber-200 hover:border-amber-400 hover:bg-amber-50/40 transition-colors cursor-pointer h-full">
+                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+                  <Coins size={13} className="text-amber-500" />
+                  Token Balance
+                  <span className="text-[10px] text-amber-400 ml-auto">tap to view</span>
+                </p>
+                <p className="text-2xl font-bold text-amber-500">{profile.token_balance ?? 0}</p>
+              </Card>
+            </button>
+          )}
+          <button onClick={() => setShowRatings(true)} className="text-left w-full">
+            <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50/40 transition-colors cursor-pointer h-full">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+                <Star size={13} className="text-blue-500" />
+                Ratings
+                <span className="text-[10px] text-blue-400 ml-auto">({ratings.length})</span>
+              </p>
+              <p className="text-2xl font-bold text-blue-500">
+                {profile.reputation_score ? profile.reputation_score.toFixed(1) : '—'}
+              </p>
+              <p className="text-[10px] text-blue-400 mt-0.5">tap to view ratings</p>
+            </Card>
+          </button>
+        </div>
+
+        {/* Doum History — 2-column */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <ListTodo size={16} />
+              Requested
+            </h2>
+            <TaskList tasks={postedTasks} empty="No requested doums yet." />
           </Card>
-          <Card className="p-4 border-2 border-blue-200">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <Star size={13} className="text-blue-500" />
-              Reputation
-            </p>
-            <p className="text-2xl font-bold text-blue-500">
-              {profile.reputation_score ? profile.reputation_score.toFixed(1) : '—'}
-            </p>
-          </Card>
-          <Card className="p-4 border-2 border-green-200">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <CheckCircle size={13} className="text-green-500" />
-              Doums Completed
-            </p>
-            <p className="text-2xl font-bold text-green-500">{completedTasks.length}</p>
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <CheckCircle size={16} />
+              Served
+            </h2>
+            <TaskList tasks={completedTasks} empty="No served doums yet." />
           </Card>
         </div>
 
-        {/* Doum History with Tabs */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-6">Doum History</h2>
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className={`grid w-full mb-6 ${isOwn ? 'grid-cols-5' : 'grid-cols-4'}`}>
-              {tabs.map(({ key, label, icon: Icon }) => (
-                <TabsTrigger key={key} value={key} className="flex items-center gap-1.5">
-                  <Icon size={13} />
-                  <span className="hidden sm:inline">{label}</span>
-                </TabsTrigger>
+      </div>
+
+      {/* Wallet popup */}
+      {isOwn && (
+        <Dialog open={showWallet} onOpenChange={setShowWallet}>
+          <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Coins size={16} className="text-amber-500" />
+                Wallet
+                <span className="text-base font-bold text-amber-500 ml-1">{profile.token_balance ?? 0}</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 mt-2">
+              {ledger.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No transactions yet.</p>
+              ) : ledger.map(entry => (
+                <div key={entry.id} className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent transition-colors">
+                  <p className="text-sm text-foreground">{entry.reason}</p>
+                  <span className={`font-bold text-sm ${entry.amount > 0 ? 'text-green-600' : 'text-destructive'}`}>
+                    {entry.amount > 0 ? '+' : ''}{entry.amount}
+                  </span>
+                </div>
               ))}
-            </TabsList>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
-            <TabsContent value="posted">
-              <TaskList tasks={postedTasks} empty="No posted tasks yet." />
-            </TabsContent>
-
-            <TabsContent value="completed">
-              <TaskList tasks={completedTasks} empty="No completed tasks yet." />
-            </TabsContent>
-
-            <TabsContent value="ratings">
-              <div className="space-y-3">
-                {ratings.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No ratings yet.</p>
-                ) : ratings.map(r => (
-                  <div key={r.id} className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        {'⭐'.repeat(r.stars)}
-                        <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>
-                      </div>
-                      {r.note && <p className="text-sm text-foreground">{r.note}</p>}
-                    </div>
-                  </div>
-                ))}
+      {/* Ratings popup */}
+      <Dialog open={showRatings} onOpenChange={setShowRatings}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star size={16} className="text-amber-400" fill="currentColor" />
+              Ratings
+              {profile.reputation_score && (
+                <span className="text-base font-bold text-blue-500 ml-1">
+                  {profile.reputation_score.toFixed(1)}
+                </span>
+              )}
+              <span className="text-sm font-normal text-muted-foreground ml-1">
+                ({ratings.length})
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            {ratings.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No ratings yet.</p>
+            ) : ratings.map(r => (
+              <div key={r.id} className="p-4 border rounded-lg space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-base tracking-wide">{'⭐'.repeat(r.stars)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                {r.note && <p className="text-sm text-foreground">{r.note}</p>}
               </div>
-            </TabsContent>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            <TabsContent value="trends">
-              <TrendsTab postedTasks={postedTasks} completedTasks={completedTasks} />
-            </TabsContent>
-
-            {isOwn && (
-              <TabsContent value="wallet">
-                <div className="space-y-2">
-                  {ledger.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No transactions yet.</p>
-                  ) : ledger.map(entry => (
-                    <div key={entry.id} className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent transition-colors">
-                      <p className="text-sm text-foreground">{entry.reason}</p>
-                      <span className={`font-bold text-sm ${entry.amount > 0 ? 'text-green-600' : 'text-destructive'}`}>
-                        {entry.amount > 0 ? '+' : ''}{entry.amount}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-            )}
-          </Tabs>
-        </Card>
-
-      </div>
     </div>
-  )
-}
-
-function TrendsTab({ postedTasks, completedTasks }) {
-  const postedCounts = {}
-  const runCounts = {}
-
-  postedTasks.forEach(t => {
-    const cat = t.category || 'Other'
-    postedCounts[cat] = (postedCounts[cat] || 0) + 1
-  })
-  completedTasks.forEach(t => {
-    const cat = t.category || 'Other'
-    runCounts[cat] = (runCounts[cat] || 0) + 1
-  })
-
-  const maxPosted = Math.max(...Object.values(postedCounts), 1)
-  const maxRun = Math.max(...Object.values(runCounts), 1)
-
-  const topPostedCat = ALL_CATS.reduce((a, b) => (postedCounts[a] || 0) >= (postedCounts[b] || 0) ? a : b)
-  const topRunCat = ALL_CATS.reduce((a, b) => (runCounts[a] || 0) >= (runCounts[b] || 0) ? a : b)
-
-  const hasPosted = postedTasks.length > 0
-  const hasRun = completedTasks.length > 0
-
-  if (!hasPosted && !hasRun) {
-    return <p className="text-center text-muted-foreground py-8">No activity yet to show trends.</p>
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Summary stat cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard value={postedTasks.length} label="Doums Posted" />
-        <StatCard value={completedTasks.length} label="Doums Run" />
-        <StatCard
-          value={postedTasks.length >= completedTasks.length ? 'Poster' : 'Domi'}
-          label="Usual Role"
-        />
-      </div>
-
-      {/* Posted task trends */}
-      {hasPosted && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Doums You Posted</h3>
-            <span className="text-xs text-muted-foreground">Top: {CAT_META[topPostedCat]?.emoji} {topPostedCat}</span>
-          </div>
-          <div className="space-y-2.5">
-            {ALL_CATS
-              .filter(c => postedCounts[c])
-              .sort((a, b) => (postedCounts[b] || 0) - (postedCounts[a] || 0))
-              .map(cat => (
-                <div key={cat}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-foreground">{CAT_META[cat]?.emoji} {cat}</span>
-                    <span className="font-semibold">{postedCounts[cat]}</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-700 ${CAT_META[cat]?.color || 'bg-gray-400'}`}
-                      style={{ width: `${((postedCounts[cat] || 0) / maxPosted) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Run task trends */}
-      {hasRun && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Doums You Ran</h3>
-            <span className="text-xs text-muted-foreground">Top: {CAT_META[topRunCat]?.emoji} {topRunCat}</span>
-          </div>
-          <div className="space-y-2.5">
-            {ALL_CATS
-              .filter(c => runCounts[c])
-              .sort((a, b) => (runCounts[b] || 0) - (runCounts[a] || 0))
-              .map(cat => (
-                <div key={cat}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-foreground">{CAT_META[cat]?.emoji} {cat}</span>
-                    <span className="font-semibold">{runCounts[cat]}</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-700 ${CAT_META[cat]?.color || 'bg-gray-400'}`}
-                      style={{ width: `${((runCounts[cat] || 0) / maxRun) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function StatCard({ value, label }) {
-  return (
-    <Card className="p-3 text-center">
-      <p className="text-xl font-bold leading-tight">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{label}</p>
-    </Card>
   )
 }
 
