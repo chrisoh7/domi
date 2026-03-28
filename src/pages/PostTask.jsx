@@ -4,8 +4,12 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { geocodePittsburgh } from '../lib/utils'
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
-import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check } from 'lucide-react'
+import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check, Sparkles, GripVertical } from 'lucide-react'
 import { moderateContent } from '../lib/moderateContent'
+import { generateSubtasks, hasAiKey } from '../lib/aiSubtasks'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button } from '../components/ui/button'
@@ -30,7 +34,7 @@ const CMU_CENTER = [40.4432, -79.9428]
 const DELIVERY_TYPES = [
   { id: 'in_person',     emoji: <Handshake size={20} />, label: 'In person',     desc: 'Meet face to face' },
   { id: 'leave_at_door', emoji: <Package size={20} />,   label: 'Leave at door', desc: 'Drop off, no meetup' },
-  { id: 'pickup_only',   emoji: <Users size={20} />,     label: 'Pickup only',   desc: 'Runner picks up only' },
+  { id: 'pickup_only',   emoji: <Users size={20} />,     label: 'Pickup only',   desc: 'Domi picks up only' },
 ]
 
 function makeStopIcon(num) {
@@ -41,6 +45,96 @@ function makeStopIcon(num) {
     iconAnchor: [14, 36],
     popupAnchor: [0, -36],
   })
+}
+
+function SortableStepRow({ step, idx, total, geoLoadingIdx, onDescriptionChange, onLocationChange, onBlurLocation, onFocusLocation, onSelectSuggestion, onUseCurrentLocation, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2">
+      {/* Drag handle */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="flex-shrink-0 mt-3 p-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+        tabIndex={-1}
+      >
+        <GripVertical size={15} />
+      </button>
+
+      {/* Number badge + connector */}
+      <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${step.lat ? 'bg-primary' : 'bg-gray-300'}`}>
+          {idx + 1}
+        </div>
+        {idx < total - 1 && (
+          <div className="w-px h-8 bg-gray-300 mt-1" />
+        )}
+      </div>
+
+      {/* Description + location inputs */}
+      <div className="flex-1 space-y-1.5">
+        <input
+          type="text"
+          value={step.description}
+          onChange={e => onDescriptionChange(e.target.value)}
+          placeholder="What to do here…"
+          className="w-full px-3 py-2 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+        />
+        <div className="relative">
+          <input
+            type="text"
+            value={step.query}
+            onChange={e => onLocationChange(e.target.value)}
+            onBlur={onBlurLocation}
+            onFocus={onFocusLocation}
+            onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+            placeholder="Search address or building…"
+            className="w-full px-3 py-2 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+          />
+          {step.showSuggestions && (
+            <div className="absolute top-full left-0 right-0 z-20 bg-background border border-border rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+              {step.suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={() => onSelectSuggestion(s)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-accent border-b border-border last:border-0"
+                >
+                  <div className="text-sm font-medium truncate">{s.display_name.split(',')[0]}</div>
+                  <div className="text-xs text-muted-foreground truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* GPS + Remove */}
+      <div className="flex flex-col gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={onUseCurrentLocation}
+          disabled={geoLoadingIdx === idx}
+          className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
+          title="Use my current location"
+        >
+          {geoLoadingIdx === idx ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+        </button>
+        {total > 1 && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+            title="Remove step"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function MapFitStops({ positions }) {
@@ -59,13 +153,13 @@ function MapFitStops({ positions }) {
   return null
 }
 
-function newStop() {
-  return { label: '', lat: null, lng: null, query: '', suggestions: [], showSuggestions: false }
+function newStep() {
+  return { id: crypto.randomUUID(), description: '', label: '', lat: null, lng: null, query: '', suggestions: [], showSuggestions: false }
 }
 
 const STEPS = [
   { label: 'Details' },
-  { label: 'Location' },
+  { label: 'Steps' },
   { label: 'Settings' },
 ]
 
@@ -88,11 +182,14 @@ export default function PostTask() {
   const [loading, setLoading] = useState(false)
   const [moderating, setModerating] = useState(false)
 
+  const [aiPreview, setAiPreview] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
   const [deliveryType, setDeliveryType] = useState('in_person')
   const [cashOffer, setCashOffer] = useState('')
 
-  // Location — multi-stop
-  const [stops, setStops] = useState([newStop()])
+  // Steps — each step has a description + location
+  const [steps, setSteps] = useState([newStep()])
   const [geoLoadingIdx, setGeoLoadingIdx] = useState(null)
   const [userPos, setUserPos] = useState(null)
   const debounceRefs = useRef({})
@@ -100,32 +197,43 @@ export default function PostTask() {
   const totalCost = tokenOffer + (boost ? 10 : 0)
   const canAfford = isDevMode || (profile?.token_balance ?? 0) >= totalCost
 
-  function updateStop(idx, fields) {
-    setStops(prev => prev.map((s, i) => i === idx ? { ...s, ...fields } : s))
+  function updateStep(idx, fields) {
+    setSteps(prev => prev.map((s, i) => i === idx ? { ...s, ...fields } : s))
   }
 
-  function addStop() {
-    setStops(prev => [...prev, newStop()])
+  function addStep() {
+    setSteps(prev => [...prev, newStep()])
   }
 
-  function removeStop(idx) {
-    setStops(prev => prev.filter((_, i) => i !== idx))
+  function removeStep(idx) {
+    setSteps(prev => prev.filter((_, i) => i !== idx))
   }
 
-  function handleStopSearchChange(idx, val) {
-    updateStop(idx, { query: val, label: val, lat: null, lng: null })
+  const stepSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  function handleStepDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setSteps(prev => {
+      const oldIdx = prev.findIndex(s => s.id === active.id)
+      const newIdx = prev.findIndex(s => s.id === over.id)
+      return arrayMove(prev, oldIdx, newIdx)
+    })
+  }
+
+  function handleStepLocationChange(idx, val) {
+    updateStep(idx, { query: val, label: val, lat: null, lng: null })
     clearTimeout(debounceRefs.current[idx])
-    if (val.length < 2) { updateStop(idx, { suggestions: [], showSuggestions: false }); return }
+    if (val.length < 2) { updateStep(idx, { suggestions: [], showSuggestions: false }); return }
     debounceRefs.current[idx] = setTimeout(async () => {
       try {
         const results = await geocodePittsburgh(val, userPos?.[0], userPos?.[1], 5)
-        updateStop(idx, { suggestions: results, showSuggestions: results.length > 0 })
+        updateStep(idx, { suggestions: results, showSuggestions: results.length > 0 })
       } catch {}
     }, 350)
   }
 
-  function selectStopSuggestion(idx, s) {
-    updateStop(idx, {
+  function selectStepSuggestion(idx, s) {
+    updateStep(idx, {
       label: s.display_name,
       lat: parseFloat(s.lat),
       lng: parseFloat(s.lon),
@@ -135,7 +243,7 @@ export default function PostTask() {
     })
   }
 
-  async function useCurrentLocationForStop(idx) {
+  async function useCurrentLocationForStep(idx) {
     if (!navigator.geolocation) return
     setGeoLoadingIdx(idx)
     navigator.geolocation.getCurrentPosition(
@@ -145,15 +253,41 @@ export default function PostTask() {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
           const data = await res.json()
           const label = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-          updateStop(idx, { label, lat, lng, query: label })
+          updateStep(idx, { label, lat, lng, query: label })
         } catch {
           const label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-          updateStop(idx, { label, lat, lng, query: label })
+          updateStep(idx, { label, lat, lng, query: label })
         }
         setGeoLoadingIdx(null)
       },
       () => setGeoLoadingIdx(null)
     )
+  }
+
+  async function handleGenerateAI() {
+    if (!title.trim()) return
+    setAiLoading(true)
+    const result = await generateSubtasks(title, description, profile?.home_location ?? null)
+    setAiPreview(result)
+    setAiLoading(false)
+  }
+
+  async function geocodeStepByLabel(idx, label) {
+    try {
+      const results = await geocodePittsburgh(label, userPos?.[0], userPos?.[1], 1)
+      if (results[0]) {
+        updateStep(idx, { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) })
+      }
+    } catch {}
+  }
+
+  function acceptAiSuggestion() {
+    if (aiPreview?.steps?.length > 0) {
+      const newSteps = aiPreview.steps.map(s => ({ ...newStep(), description: s.description, label: s.location, query: s.location }))
+      setSteps(newSteps)
+      newSteps.forEach((_, i) => geocodeStepByLabel(i, aiPreview.steps[i].location))
+    }
+    setAiPreview(null)
   }
 
   async function handleSubmit(e) {
@@ -168,7 +302,7 @@ export default function PostTask() {
       const { result, reason } = await moderateContent(`${title}\n${description}`)
       setModerating(false)
       if (result === 'blocked') {
-        setError(`Your task was blocked by content moderation. Reason: ${reason}`)
+        setError(`Your doum was blocked by content moderation. Reason: ${reason}`)
         setLoading(false)
         return
       }
@@ -178,9 +312,9 @@ export default function PostTask() {
       }
     }
 
-    const locationStops = stops
+    const locationStops = steps
       .filter(s => s.label || (s.lat && s.lng))
-      .map(s => ({ label: s.label, lat: s.lat, lng: s.lng }))
+      .map(s => ({ label: s.label, lat: s.lat, lng: s.lng, description: s.description }))
     const firstStop = locationStops[0] ?? null
 
     const { data: task, error: taskError } = await supabase
@@ -203,6 +337,7 @@ export default function PostTask() {
         boosted: boost,
         requires_approval: requiresApproval,
         photo_url: photoUrl || null,
+        subtasks: steps.filter(s => s.description.trim()).map(s => ({ text: s.description.trim(), completed: false, location: s.label || null })),
         status: 'open',
         flagged: false,
         moderation_status: moderationStatus,
@@ -223,7 +358,7 @@ export default function PostTask() {
       await supabase.from('token_ledger').insert({
         user_id: profile.id,
         amount: -totalCost,
-        reason: boost ? `Posted task "${title}" (+ boost)` : `Posted task "${title}"`,
+        reason: boost ? `Posted doum "${title}" (+ boost)` : `Posted doum "${title}"`,
         task_id: task.id,
       })
     }
@@ -245,8 +380,8 @@ export default function PostTask() {
     { value: 240, label: '4+ hrs' },
   ]
 
-  const positionedStops = stops.map((s, i) => ({ ...s, num: i + 1 })).filter(s => s.lat && s.lng)
-  const stopPositions = positionedStops.map(s => [s.lat, s.lng])
+  const positionedSteps = steps.map((s, i) => ({ ...s, num: i + 1 })).filter(s => s.lat && s.lng)
+  const stepPositions = positionedSteps.map(s => [s.lat, s.lng])
 
   function goNext() {
     setError('')
@@ -270,7 +405,7 @@ export default function PostTask() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             {step === 0 ? 'Back to Doum' : 'Back'}
           </Button>
-          <h1 className="text-2xl font-bold">Ask for Help</h1>
+          <h1 className="text-2xl font-bold">Post a Doum</h1>
           <p className="text-muted-foreground mt-2">Get help from fellow students</p>
         </div>
 
@@ -374,7 +509,7 @@ export default function PostTask() {
             </Card>
           )}
 
-          {/* ── Step 2: Location ── */}
+          {/* ── Step 2: Steps ── */}
           {step === 1 && (
             <Card className="p-6 space-y-5">
               {/* Delivery type */}
@@ -400,95 +535,88 @@ export default function PostTask() {
                 </div>
               </div>
 
-              {/* Location — multi-stop */}
+              {/* Steps — unified description + location per row */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <MapPin size={14} className="text-primary" />
-                  Locations
-                </Label>
-
-                {/* Stop list */}
-                <div className="space-y-2">
-                  {stops.map((stop, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      {/* Number badge + connector line */}
-                      <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${stop.lat ? 'bg-primary' : 'bg-gray-300'}`}>
-                          {idx + 1}
-                        </div>
-                        {idx < stops.length - 1 && (
-                          <div className="w-px h-4 bg-gray-300 mt-1" />
-                        )}
-                      </div>
-
-                      {/* Search input with autocomplete */}
-                      <div className="flex-1 relative">
-                        <input
-                          type="text"
-                          value={stop.query}
-                          onChange={e => handleStopSearchChange(idx, e.target.value)}
-                          onBlur={() => setTimeout(() => updateStop(idx, { showSuggestions: false }), 150)}
-                          onFocus={() => stop.suggestions.length > 0 && updateStop(idx, { showSuggestions: true })}
-                          onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
-                          placeholder={
-                            stops.length === 1 ? 'Search address or building…'
-                            : idx === 0 ? 'Start — search address or building…'
-                            : idx === stops.length - 1 ? 'End — search address or building…'
-                            : `Stop ${idx + 1} — search address or building…`
-                          }
-                          className="w-full px-3 py-2.5 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                        />
-                        {stop.showSuggestions && (
-                          <div className="absolute top-full left-0 right-0 z-20 bg-background border border-border rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
-                            {stop.suggestions.map((s, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onMouseDown={() => selectStopSuggestion(idx, s)}
-                                className="w-full text-left px-3 py-2.5 hover:bg-accent border-b border-border last:border-0"
-                              >
-                                <div className="text-sm font-medium truncate">{s.display_name.split(',')[0]}</div>
-                                <div className="text-xs text-muted-foreground truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* GPS + Remove */}
-                      <div className="flex gap-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => useCurrentLocationForStop(idx)}
-                          disabled={geoLoadingIdx === idx}
-                          className="p-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
-                          title="Use my current location"
-                        >
-                          {geoLoadingIdx === idx ? <Loader2 size={14} className="animate-spin" /> : <Navigation size={14} />}
-                        </button>
-                        {stops.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeStop(idx)}
-                            className="p-2.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                            title="Remove stop"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5">
+                    <MapPin size={14} className="text-primary" />
+                    Steps
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateAI}
+                    disabled={!title.trim() || aiLoading || !hasAiKey}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-40 transition-colors"
+                    title={!hasAiKey ? 'Add VITE_ANTHROPIC_API_KEY to enable AI suggestions' : ''}
+                  >
+                    {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {aiLoading ? 'Thinking…' : 'AI suggest'}
+                  </button>
                 </div>
 
-                {/* Add route */}
+                {/* AI preview card */}
+                {aiPreview && (
+                  <div className="mb-3 bg-violet-50 border border-violet-100 rounded-xl p-3.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 mb-2.5">
+                      <Sparkles size={11} /> AI suggestion
+                    </div>
+                    <ol className="space-y-2 mb-3">
+                      {aiPreview.steps?.map((s, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="w-4 h-4 rounded-full bg-violet-200 text-violet-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                            {i + 1}
+                          </span>
+                          <span className="flex-1">{s.description}</span>
+                          <span className="text-xs text-violet-400 flex items-center gap-1 flex-shrink-0">
+                            <MapPin size={9} />{s.location.split(',')[0]}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={acceptAiSuggestion}
+                        className="flex-1 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-semibold hover:bg-violet-700 transition-colors">
+                        Use these
+                      </button>
+                      <button type="button" onClick={() => setAiPreview(null)}
+                        className="flex-1 py-1.5 border border-violet-200 text-violet-600 rounded-lg text-xs font-semibold hover:bg-violet-50 transition-colors">
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step list */}
+                <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={handleStepDragEnd}>
+                  <SortableContext items={steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {steps.map((s, idx) => (
+                        <SortableStepRow
+                          key={s.id}
+                          step={s}
+                          idx={idx}
+                          total={steps.length}
+                          geoLoadingIdx={geoLoadingIdx}
+                          onDescriptionChange={val => updateStep(idx, { description: val })}
+                          onLocationChange={val => handleStepLocationChange(idx, val)}
+                          onBlurLocation={() => setTimeout(() => updateStep(idx, { showSuggestions: false }), 150)}
+                          onFocusLocation={() => s.suggestions.length > 0 && updateStep(idx, { showSuggestions: true })}
+                          onSelectSuggestion={sg => selectStepSuggestion(idx, sg)}
+                          onUseCurrentLocation={() => useCurrentLocationForStep(idx)}
+                          onRemove={() => removeStep(idx)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+
                 <button
                   type="button"
-                  onClick={addStop}
+                  onClick={addStep}
                   className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline"
                 >
                   <Plus size={14} />
-                  Add route
+                  Add step
                 </button>
 
                 {/* Map */}
@@ -503,17 +631,17 @@ export default function PostTask() {
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <MapFitStops positions={stopPositions} />
-                    {positionedStops.map(stop => (
-                      <Marker key={stop.num} position={[stop.lat, stop.lng]} icon={makeStopIcon(stop.num)} />
+                    <MapFitStops positions={stepPositions} />
+                    {positionedSteps.map(ps => (
+                      <Marker key={ps.num} position={[ps.lat, ps.lng]} icon={makeStopIcon(ps.num)} />
                     ))}
-                    {stopPositions.length >= 2 && (
-                      <Polyline positions={stopPositions} color="#38bdf8" weight={2.5} dashArray="8 5" />
+                    {stepPositions.length >= 2 && (
+                      <Polyline positions={stepPositions} color="#38bdf8" weight={2.5} dashArray="8 5" />
                     )}
                   </MapContainer>
                 </div>
 
-                {positionedStops.length === 0 && (
+                {positionedSteps.length === 0 && (
                   <p className="text-xs text-muted-foreground">
                     Search an address above or tap <Navigation size={10} className="inline" /> to use your current location.
                   </p>
@@ -586,9 +714,9 @@ export default function PostTask() {
                   <div>
                     <Label htmlFor="requiresApproval" className="flex items-center gap-1.5 cursor-pointer">
                       <UserCheck size={14} />
-                      Require runner approval
+                      Require domi approval
                     </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">You confirm the runner before they start</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">You confirm the domi before they start</p>
                   </div>
                   <Switch
                     id="requiresApproval"
@@ -673,17 +801,17 @@ export default function PostTask() {
                   : loading
                     ? 'Posting...'
                     : isDevMode
-                      ? 'Request Doum (Dev — no tokens deducted)'
+                      ? 'Post Doum (Dev — no tokens deducted)'
                       : !canAfford
                         ? 'Insufficient tokens'
-                        : `Request Doum (−${totalCost} tokens)`}
+                        : `Post Doum (−${totalCost} tokens)`}
               </Button>
             )}
           </div>
 
           {step === STEPS.length - 1 && !canAfford && !isDevMode && (
             <p className="text-center text-sm text-muted-foreground mt-3">
-              <a href="/tokens" className="text-primary font-medium hover:underline">Buy tokens</a> to post this task.
+              <a href="/tokens" className="text-primary font-medium hover:underline">Buy tokens</a> to post this doum.
             </p>
           )}
 

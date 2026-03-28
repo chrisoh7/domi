@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import WelcomeBanner from './components/WelcomeBanner'
+import ActiveDoumWidget from './components/ActiveDoumWidget'
 import Login from './pages/Login'
 import Feed from './pages/Feed'
 import PostTask from './pages/PostTask'
@@ -17,8 +18,9 @@ function Layout({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main>{children}</main>
+      <main className="pb-4">{children}</main>
       <WelcomeBanner />
+      <ActiveDoumWidget />
     </div>
   )
 }

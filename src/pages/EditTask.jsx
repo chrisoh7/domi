@@ -2,11 +2,22 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Coins, Zap, MapPin, Navigation, Loader2, Plus, X, DollarSign, Package, Handshake, Users } from 'lucide-react'
+import { Coins, Zap, MapPin, Navigation, Loader2, Plus, X, DollarSign, Package, Handshake, Users, Sparkles, GripVertical } from 'lucide-react'
 import { geocodePittsburgh } from '../lib/utils'
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { generateSubtasks, hasAiKey } from '../lib/aiSubtasks'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
+import { Label } from '../components/ui/label'
+import { Slider } from '../components/ui/slider'
+import { Switch } from '../components/ui/switch'
 
 const CATEGORIES = [
   { id: 'Errands & Pickup', emoji: '🛍️', desc: 'Packages & pickup' },
@@ -33,7 +44,7 @@ const CMU_CENTER = [40.4432, -79.9428]
 const DELIVERY_TYPES = [
   { id: 'in_person',     emoji: <Handshake size={20} />, label: 'In person',     desc: 'Meet face to face' },
   { id: 'leave_at_door', emoji: <Package size={20} />,   label: 'Leave at door', desc: 'Drop off, no meetup' },
-  { id: 'pickup_only',   emoji: <Users size={20} />,     label: 'Pickup only',   desc: 'Runner picks up only' },
+  { id: 'pickup_only',   emoji: <Users size={20} />,     label: 'Pickup only',   desc: 'Domi picks up only' },
 ]
 
 function makeStopIcon(num) {
@@ -44,6 +55,72 @@ function makeStopIcon(num) {
     iconAnchor: [14, 36],
     popupAnchor: [0, -36],
   })
+}
+
+function SortableStepRow({ step, idx, total, geoLoadingIdx, onDescriptionChange, onLocationChange, onBlurLocation, onFocusLocation, onSelectSuggestion, onUseCurrentLocation, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2">
+      <button type="button" {...attributes} {...listeners}
+        className="flex-shrink-0 mt-3 p-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none" tabIndex={-1}>
+        <GripVertical size={15} />
+      </button>
+
+      <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${step.lat ? 'bg-primary' : 'bg-gray-300'}`}>
+          {idx + 1}
+        </div>
+        {idx < total - 1 && <div className="w-px h-8 bg-gray-300 mt-1" />}
+      </div>
+
+      <div className="flex-1 space-y-1.5">
+        <input
+          type="text"
+          value={step.description}
+          onChange={e => onDescriptionChange(e.target.value)}
+          placeholder="What to do here…"
+          className="w-full px-3 py-2 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+        />
+        <div className="relative">
+          <input
+            type="text"
+            value={step.query}
+            onChange={e => onLocationChange(e.target.value)}
+            onBlur={onBlurLocation}
+            onFocus={onFocusLocation}
+            onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+            placeholder="Search address or building…"
+            className="w-full px-3 py-2 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+          />
+          {step.showSuggestions && (
+            <div className="absolute top-full left-0 right-0 z-20 bg-background border border-border rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+              {step.suggestions.map((s, i) => (
+                <button key={i} type="button" onMouseDown={() => onSelectSuggestion(s)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-accent border-b border-border last:border-0">
+                  <div className="text-sm font-medium truncate">{s.display_name.split(',')[0]}</div>
+                  <div className="text-xs text-muted-foreground truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1 flex-shrink-0">
+        <button type="button" onClick={onUseCurrentLocation} disabled={geoLoadingIdx === idx}
+          className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60" title="Use my current location">
+          {geoLoadingIdx === idx ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+        </button>
+        {total > 1 && (
+          <button type="button" onClick={onRemove}
+            className="p-2 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Remove step">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function MapFitStops({ positions }) {
@@ -62,13 +139,13 @@ function MapFitStops({ positions }) {
   return null
 }
 
-function newStop() {
-  return { label: '', lat: null, lng: null, query: '', suggestions: [], showSuggestions: false }
+function newStep() {
+  return { id: crypto.randomUUID(), description: '', label: '', lat: null, lng: null, query: '', suggestions: [], showSuggestions: false }
 }
 
 export default function EditTask() {
   const { id } = useParams()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
 
   const [loadingTask, setLoadingTask] = useState(true)
@@ -86,7 +163,10 @@ export default function EditTask() {
   const [deliveryType, setDeliveryType] = useState('in_person')
   const [cashOffer, setCashOffer] = useState('')
 
-  const [stops, setStops] = useState([newStop()])
+  const [aiPreview, setAiPreview] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const [steps, setSteps] = useState([newStep()])
   const [geoLoadingIdx, setGeoLoadingIdx] = useState(null)
   const [userPos, setUserPos] = useState(null)
   const debounceRefs = useRef({})
@@ -109,13 +189,28 @@ export default function EditTask() {
       if (data.delivery_type) setDeliveryType(data.delivery_type)
       if (data.cash_offer) setCashOffer(String(data.cash_offer))
 
-      // Load location stops
-      if (Array.isArray(data.location_stops) && data.location_stops.length > 0) {
-        setStops(data.location_stops.map(s => ({ ...newStop(), label: s.label || '', lat: s.lat, lng: s.lng, query: s.label || '' })))
-      } else if (data.location_lat && data.location_lng) {
-        setStops([{ ...newStop(), label: data.location_pickup || '', lat: data.location_lat, lng: data.location_lng, query: data.location_pickup || '' }])
-      } else if (data.location_pickup) {
-        setStops([{ ...newStop(), label: data.location_pickup, query: data.location_pickup }])
+      // Merge location_stops + subtasks into unified steps
+      const locStops = Array.isArray(data.location_stops) && data.location_stops.length > 0
+        ? data.location_stops
+        : data.location_lat && data.location_lng
+          ? [{ label: data.location_pickup || '', lat: data.location_lat, lng: data.location_lng }]
+          : data.location_pickup
+            ? [{ label: data.location_pickup }]
+            : []
+
+      const subs = Array.isArray(data.subtasks) ? data.subtasks : []
+
+      if (locStops.length > 0) {
+        setSteps(locStops.map((s, i) => ({
+          ...newStep(),
+          description: subs[i]?.text || s.description || '',
+          label: s.label || '',
+          lat: s.lat ?? null,
+          lng: s.lng ?? null,
+          query: s.label || '',
+        })))
+      } else if (subs.length > 0) {
+        setSteps(subs.map(s => ({ ...newStep(), description: s.text || '' })))
       }
 
       setLoadingTask(false)
@@ -123,32 +218,43 @@ export default function EditTask() {
     loadTask()
   }, [id, user?.id]) // eslint-disable-line
 
-  function updateStop(idx, fields) {
-    setStops(prev => prev.map((s, i) => i === idx ? { ...s, ...fields } : s))
+  function updateStep(idx, fields) {
+    setSteps(prev => prev.map((s, i) => i === idx ? { ...s, ...fields } : s))
   }
 
-  function addStop() {
-    setStops(prev => [...prev, newStop()])
+  function addStep() {
+    setSteps(prev => [...prev, newStep()])
   }
 
-  function removeStop(idx) {
-    setStops(prev => prev.filter((_, i) => i !== idx))
+  function removeStep(idx) {
+    setSteps(prev => prev.filter((_, i) => i !== idx))
   }
 
-  function handleStopSearchChange(idx, val) {
-    updateStop(idx, { query: val, label: val, lat: null, lng: null })
+  const stepSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  function handleStepDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setSteps(prev => {
+      const oldIdx = prev.findIndex(s => s.id === active.id)
+      const newIdx = prev.findIndex(s => s.id === over.id)
+      return arrayMove(prev, oldIdx, newIdx)
+    })
+  }
+
+  function handleStepLocationChange(idx, val) {
+    updateStep(idx, { query: val, label: val, lat: null, lng: null })
     clearTimeout(debounceRefs.current[idx])
-    if (val.length < 2) { updateStop(idx, { suggestions: [], showSuggestions: false }); return }
+    if (val.length < 2) { updateStep(idx, { suggestions: [], showSuggestions: false }); return }
     debounceRefs.current[idx] = setTimeout(async () => {
       try {
         const results = await geocodePittsburgh(val, userPos?.[0], userPos?.[1], 5)
-        updateStop(idx, { suggestions: results, showSuggestions: results.length > 0 })
+        updateStep(idx, { suggestions: results, showSuggestions: results.length > 0 })
       } catch {}
     }, 350)
   }
 
-  function selectStopSuggestion(idx, s) {
-    updateStop(idx, {
+  function selectStepSuggestion(idx, s) {
+    updateStep(idx, {
       label: s.display_name,
       lat: parseFloat(s.lat),
       lng: parseFloat(s.lon),
@@ -158,7 +264,7 @@ export default function EditTask() {
     })
   }
 
-  async function useCurrentLocationForStop(idx) {
+  async function useCurrentLocationForStep(idx) {
     if (!navigator.geolocation) return
     setGeoLoadingIdx(idx)
     navigator.geolocation.getCurrentPosition(
@@ -168,10 +274,9 @@ export default function EditTask() {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
           const data = await res.json()
           const label = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-          updateStop(idx, { label, lat, lng, query: label })
+          updateStep(idx, { label, lat, lng, query: label })
         } catch {
-          const label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-          updateStop(idx, { label, lat, lng, query: label })
+          updateStep(idx, { label: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, query: `${lat.toFixed(5)}, ${lng.toFixed(5)}` })
         }
         setGeoLoadingIdx(null)
       },
@@ -179,13 +284,37 @@ export default function EditTask() {
     )
   }
 
+  async function geocodeStepByLabel(idx, label) {
+    try {
+      const results = await geocodePittsburgh(label, userPos?.[0], userPos?.[1], 1)
+      if (results[0]) updateStep(idx, { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) })
+    } catch {}
+  }
+
+  async function handleGenerateAI() {
+    if (!title.trim()) return
+    setAiLoading(true)
+    const result = await generateSubtasks(title, description, profile?.home_location ?? null)
+    setAiPreview(result)
+    setAiLoading(false)
+  }
+
+  function acceptAiSuggestion() {
+    if (aiPreview?.steps?.length > 0) {
+      const newSteps = aiPreview.steps.map(s => ({ ...newStep(), description: s.description, label: s.location, query: s.location }))
+      setSteps(newSteps)
+      newSteps.forEach((_, i) => geocodeStepByLabel(i, aiPreview.steps[i].location))
+    }
+    setAiPreview(null)
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError(''); setLoading(true)
 
-    const locationStops = stops
+    const locationStops = steps
       .filter(s => s.label || (s.lat && s.lng))
-      .map(s => ({ label: s.label, lat: s.lat, lng: s.lng }))
+      .map(s => ({ label: s.label, lat: s.lat, lng: s.lng, description: s.description }))
     const firstStop = locationStops[0] ?? null
 
     const { error: updateError } = await supabase
@@ -205,6 +334,7 @@ export default function EditTask() {
         delivery_type: deliveryType,
         boosted: boost,
         photo_url: photoUrl || null,
+        subtasks: steps.filter(s => s.description.trim()).map(s => ({ text: s.description.trim(), completed: false, location: s.label || null })),
       })
       .eq('id', id)
 
@@ -213,227 +343,255 @@ export default function EditTask() {
   }
 
   const minDateTime = new Date().toISOString().slice(0, 16)
-  const positionedStops = stops.map((s, i) => ({ ...s, num: i + 1 })).filter(s => s.lat && s.lng)
-  const stopPositions = positionedStops.map(s => [s.lat, s.lng])
+  const positionedSteps = steps.map((s, i) => ({ ...s, num: i + 1 })).filter(s => s.lat && s.lng)
+  const stepPositions = positionedSteps.map(s => [s.lat, s.lng])
 
   if (loadingTask) {
-    return <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#C41230]" /></div>
+    return <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary" /></div>
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-[#1A1A2E] mb-6">Edit Task</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      <h1 className="text-2xl font-bold mb-6">Edit Doum</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Basic info */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Title *</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} required
-              className="mt-1 w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]" />
+        <Card className="p-5 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required />
           </div>
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Description *</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3}
-              placeholder="Full details — include any specific pickup instructions, access codes, what to bring, etc."
-              className="mt-1 w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230] resize-none" />
+          <div className="space-y-2">
+            <Label htmlFor="description">Description *</Label>
+            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} required rows={3}
+              placeholder="Full details — include any specific pickup instructions, access codes, what to bring, etc." />
           </div>
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Deadline</label>
-            <input type="datetime-local" value={deadlineAt} onChange={e => setDeadlineAt(e.target.value)} min={minDateTime}
-              className="mt-1 w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]" />
+          <div className="space-y-2">
+            <Label htmlFor="deadline">Deadline</Label>
+            <Input id="deadline" type="datetime-local" value={deadlineAt} onChange={e => setDeadlineAt(e.target.value)} min={minDateTime} />
           </div>
-          <div>
-            <label className="text-sm font-semibold text-gray-700 block mb-1.5">⏱ Estimated Time to Complete</label>
+          <div className="space-y-2">
+            <Label>⏱ Estimated Time to Complete</Label>
             <div className="flex flex-wrap gap-1.5">
               {EST_OPTIONS.map(opt => (
-                <button key={opt.value} type="button"
+                <Button key={opt.value} type="button"
+                  variant={estMinutes === opt.value ? 'default' : 'outline'}
+                  size="sm"
                   onClick={() => setEstMinutes(estMinutes === opt.value ? null : opt.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${estMinutes === opt.value ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] scale-105' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}>
+                  className={`rounded-full ${estMinutes === opt.value ? 'bg-primary text-white hover:bg-primary/90' : ''}`}>
                   {opt.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-          <div>
-            <label className="text-sm font-semibold text-gray-700">Photo URL (optional)</label>
-            <input type="url" value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://..."
-              className="mt-1 w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]" />
+          <div className="space-y-2">
+            <Label htmlFor="photoUrl">Photo URL (optional)</Label>
+            <Input id="photoUrl" type="url" value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://..." />
           </div>
-        </div>
+        </Card>
 
         {/* Category */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <label className="text-sm font-semibold text-gray-700 block mb-3">Category *</label>
-          <div className="grid grid-cols-3 gap-2">
-            {CATEGORIES.map(cat => {
-              const active = category === cat.id
-              return (
-                <button key={cat.id} type="button" onClick={() => setCategory(cat.id)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer select-none transition-all duration-200 ease-out ${active ? 'border-[#C41230] bg-red-50 shadow-sm scale-[1.04]' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 hover:scale-[1.02]'}`}>
-                  <span className="text-2xl transition-transform duration-200" style={{ transform: active ? 'scale(1.2)' : 'scale(1)' }}>{cat.emoji}</span>
-                  <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-[#C41230]' : 'text-gray-700'}`}>{cat.id}</span>
-                  <span className="text-[10px] text-gray-400 text-center hidden sm:block">{cat.desc}</span>
-                  {active && <span className="w-1.5 h-1.5 rounded-full bg-[#C41230] mt-0.5" />}
-                </button>
-              )
-            })}
+        <Card className="p-5">
+          <div className="space-y-3">
+            <Label>Category *</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {CATEGORIES.map(cat => {
+                const active = category === cat.id
+                return (
+                  <Button key={cat.id} type="button"
+                    variant={active ? 'default' : 'outline'}
+                    onClick={() => setCategory(cat.id)}
+                    className={`flex flex-col items-center gap-1.5 h-auto py-3 ${active ? 'bg-primary text-white hover:bg-primary/90' : ''}`}>
+                    <span className="text-2xl">{cat.emoji}</span>
+                    <span className="text-xs font-semibold text-center leading-tight">{cat.id}</span>
+                    <span className="text-[10px] opacity-70 text-center leading-tight hidden sm:block">{cat.desc}</span>
+                  </Button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </Card>
 
         {/* Delivery type */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <label className="text-sm font-semibold text-gray-700 block mb-3">Delivery / Handoff Type *</label>
-          <div className="grid grid-cols-3 gap-2">
-            {DELIVERY_TYPES.map(dt => {
-              const active = deliveryType === dt.id
-              return (
-                <button key={dt.id} type="button" onClick={() => setDeliveryType(dt.id)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer select-none transition-all duration-200 ease-out ${active ? 'border-[#C41230] bg-red-50 shadow-sm scale-[1.04]' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 hover:scale-[1.02]'}`}>
-                  <span className={`transition-colors ${active ? 'text-[#C41230]' : 'text-gray-500'}`}>{dt.emoji}</span>
-                  <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-[#C41230]' : 'text-gray-700'}`}>{dt.label}</span>
-                  <span className="text-[10px] text-gray-400 text-center hidden sm:block">{dt.desc}</span>
-                  {active && <span className="w-1.5 h-1.5 rounded-full bg-[#C41230] mt-0.5" />}
-                </button>
-              )
-            })}
+        <Card className="p-5">
+          <div className="space-y-3">
+            <Label>Delivery / Handoff Type *</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {DELIVERY_TYPES.map(dt => {
+                const active = deliveryType === dt.id
+                return (
+                  <Button key={dt.id} type="button"
+                    variant={active ? 'default' : 'outline'}
+                    onClick={() => setDeliveryType(dt.id)}
+                    className={`flex flex-col h-auto py-3 items-center gap-1.5 ${active ? 'bg-primary text-white hover:bg-primary/90' : ''}`}>
+                    <span className={active ? 'text-white' : 'text-muted-foreground'}>{dt.emoji}</span>
+                    <span className="text-xs font-semibold text-center leading-tight">{dt.label}</span>
+                    <span className="text-[10px] opacity-70 text-center leading-tight hidden sm:block">{dt.desc}</span>
+                  </Button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Location — multi-stop */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-            <MapPin size={14} className="text-[#C41230]" />
-            Locations
-          </label>
+        {/* Steps — unified description + location per row */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="flex items-center gap-1.5">
+              <MapPin size={14} className="text-primary" />
+              Steps
+            </Label>
+            <button
+              type="button"
+              onClick={handleGenerateAI}
+              disabled={!title.trim() || aiLoading || !hasAiKey}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-40 transition-colors"
+              title={!hasAiKey ? 'Add VITE_ANTHROPIC_API_KEY to enable AI suggestions' : ''}
+            >
+              {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {aiLoading ? 'Thinking…' : 'AI suggest'}
+            </button>
+          </div>
 
-          <div className="space-y-2 mb-3">
-            {stops.map((stop, idx) => (
-              <div key={idx} className="flex items-start gap-2">
-                <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${stop.lat ? 'bg-[#C41230]' : 'bg-gray-300'}`}>
-                    {idx + 1}
-                  </div>
-                  {idx < stops.length - 1 && <div className="w-px h-4 bg-gray-300 mt-1" />}
-                </div>
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={stop.query}
-                    onChange={e => handleStopSearchChange(idx, e.target.value)}
-                    onBlur={() => setTimeout(() => updateStop(idx, { showSuggestions: false }), 150)}
-                    onFocus={() => stop.suggestions.length > 0 && updateStop(idx, { showSuggestions: true })}
-                    onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
-                    placeholder={
-                      stops.length === 1 ? 'Search address or building…'
-                      : idx === 0 ? 'Start — search address or building…'
-                      : idx === stops.length - 1 ? 'End — search address or building…'
-                      : `Stop ${idx + 1} — search address or building…`
-                    }
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]"
-                  />
-                  {stop.showSuggestions && (
-                    <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
-                      {stop.suggestions.map((s, i) => (
-                        <button key={i} type="button" onMouseDown={() => selectStopSuggestion(idx, s)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0">
-                          <div className="text-sm font-medium text-gray-800 truncate">{s.display_name.split(',')[0]}</div>
-                          <div className="text-xs text-gray-400 truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button type="button" onClick={() => useCurrentLocationForStop(idx)} disabled={geoLoadingIdx === idx}
-                    className="p-2.5 bg-[#C41230] text-white rounded-lg hover:bg-[#a00f28] transition-colors disabled:opacity-60" title="Use my current location">
-                    {geoLoadingIdx === idx ? <Loader2 size={14} className="animate-spin" /> : <Navigation size={14} />}
-                  </button>
-                  {stops.length > 1 && (
-                    <button type="button" onClick={() => removeStop(idx)}
-                      className="p-2.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Remove stop">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
+          {/* AI preview card */}
+          {aiPreview && (
+            <div className="mb-3 bg-violet-50 border border-violet-100 rounded-xl p-3.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 mb-2.5">
+                <Sparkles size={11} /> AI suggestion
               </div>
-            ))}
-          </div>
+              <ol className="space-y-2 mb-3">
+                {aiPreview.steps?.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="w-4 h-4 rounded-full bg-violet-200 text-violet-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1">{s.description}</span>
+                    <span className="text-xs text-violet-400 flex items-center gap-1 flex-shrink-0">
+                      <MapPin size={9} />{s.location.split(',')[0]}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="flex gap-2">
+                <button type="button" onClick={acceptAiSuggestion}
+                  className="flex-1 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-semibold hover:bg-violet-700 transition-colors">
+                  Use these
+                </button>
+                <button type="button" onClick={() => setAiPreview(null)}
+                  className="flex-1 py-1.5 border border-violet-200 text-violet-600 rounded-lg text-xs font-semibold hover:bg-violet-50 transition-colors">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
 
-          <button type="button" onClick={addStop}
-            className="flex items-center gap-1.5 text-sm text-[#C41230] font-medium hover:underline mb-4">
+          {/* Step list */}
+          <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={handleStepDragEnd}>
+            <SortableContext items={steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3 mb-3">
+                {steps.map((step, idx) => (
+                  <SortableStepRow
+                    key={step.id}
+                    step={step}
+                    idx={idx}
+                    total={steps.length}
+                    geoLoadingIdx={geoLoadingIdx}
+                    onDescriptionChange={val => updateStep(idx, { description: val })}
+                    onLocationChange={val => handleStepLocationChange(idx, val)}
+                    onBlurLocation={() => setTimeout(() => updateStep(idx, { showSuggestions: false }), 150)}
+                    onFocusLocation={() => step.suggestions.length > 0 && updateStep(idx, { showSuggestions: true })}
+                    onSelectSuggestion={s => selectStepSuggestion(idx, s)}
+                    onUseCurrentLocation={() => useCurrentLocationForStep(idx)}
+                    onRemove={() => removeStep(idx)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+
+          <button type="button" onClick={addStep}
+            className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mb-4">
             <Plus size={14} />
-            Add route
+            Add step
           </button>
 
           <div className="rounded-xl overflow-hidden" style={{ position: 'relative', zIndex: 0 }}>
             <MapContainer center={CMU_CENTER} zoom={15} style={{ height: 220, width: '100%' }} scrollWheelZoom={false}>
               <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <MapFitStops positions={stopPositions} />
-              {positionedStops.map(stop => (
-                <Marker key={stop.num} position={[stop.lat, stop.lng]} icon={makeStopIcon(stop.num)} />
+              <MapFitStops positions={stepPositions} />
+              {positionedSteps.map(ps => (
+                <Marker key={ps.num} position={[ps.lat, ps.lng]} icon={makeStopIcon(ps.num)} />
               ))}
-              {stopPositions.length >= 2 && (
-                <Polyline positions={stopPositions} color="#C41230" weight={2.5} dashArray="8 5" />
+              {stepPositions.length >= 2 && (
+                <Polyline positions={stepPositions} color="#38bdf8" weight={2.5} dashArray="8 5" />
               )}
             </MapContainer>
           </div>
-        </div>
+
+          {positionedSteps.length === 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Search an address above or tap <Navigation size={10} className="inline" /> to use your current location.
+            </p>
+          )}
+        </Card>
 
         {/* Token offer */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-            <Coins size={15} className="text-[#F5A623]" />
-            Token Offer: <span className="text-[#F5A623] font-bold ml-1">{tokenOffer}</span>
-          </label>
-          <input type="range" min={1} max={100} value={tokenOffer} onChange={e => setTokenOffer(Number(e.target.value))}
-            className="mt-2 w-full accent-[#C41230]" />
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>1 (trivial)</span><span>30+ (high effort)</span><span>100</span>
+        <Card className="p-5 space-y-4">
+          <div className="space-y-3">
+            <Label className="flex items-center gap-1.5">
+              <Coins size={15} className="text-amber-500" />
+              Token Offer: <span className="text-amber-500 font-bold ml-1">{tokenOffer}</span>
+            </Label>
+            <Slider
+              min={1}
+              max={100}
+              step={1}
+              value={[tokenOffer]}
+              onValueChange={([v]) => setTokenOffer(v)}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>1 (trivial)</span><span>30+ (high effort)</span><span>100</span>
+            </div>
           </div>
 
-          <div className="mt-4">
-            <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5 mb-1">
+          <div className="space-y-2">
+            <Label htmlFor="cashOffer" className="flex items-center gap-1.5">
               <DollarSign size={14} className="text-green-600" />
               Cash offer (optional)
-            </label>
+            </Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-              <input type="number" min={0} step={0.01} value={cashOffer} onChange={e => setCashOffer(e.target.value)}
-                placeholder="0.00"
-                className="w-full pl-7 pr-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#C41230]" />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+              <Input id="cashOffer" type="number" min={0} step={0.01} value={cashOffer}
+                onChange={e => setCashOffer(e.target.value)} placeholder="0.00" className="pl-7" />
             </div>
-            <p className="text-xs text-gray-400 mt-1">Optional cash payment in addition to tokens</p>
+            <p className="text-xs text-muted-foreground">Optional cash payment in addition to tokens</p>
           </div>
 
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <label className="flex items-center gap-3 cursor-pointer" onClick={() => setBoost(b => !b)}>
-              <div className="relative flex-shrink-0">
-                <div className={`w-10 h-5 rounded-full transition-colors duration-200 ${boost ? 'bg-[#F5A623]' : 'bg-gray-200'}`} />
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${boost ? 'translate-x-5' : ''}`} />
-              </div>
+          <div className="bg-accent rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                  <Zap size={14} className="text-[#F5A623]" />Boost listing (+10 tokens)
-                </div>
-                <p className="text-xs text-gray-500">Pins your task to the top of the feed</p>
+                <Label htmlFor="boost" className="flex items-center gap-1.5 cursor-pointer">
+                  <Zap size={14} className="text-amber-500" />
+                  Boost listing (+10 tokens)
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Pins your doum to the top of the feed</p>
               </div>
-            </label>
+              <Switch id="boost" checked={boost} onCheckedChange={setBoost} />
+            </div>
           </div>
-        </div>
+        </Card>
 
         {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
         <div className="flex gap-3">
-          <button type="button" onClick={() => navigate(`/task/${id}`)}
-            className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
+          <Button type="button" variant="outline" onClick={() => navigate(`/task/${id}`)} className="flex-1">
             Cancel
-          </button>
-          <button type="submit" disabled={loading}
-            className="flex-1 py-3 bg-[#C41230] text-white rounded-xl font-semibold hover:bg-[#a00f28] transition-colors disabled:opacity-60">
+          </Button>
+          <Button type="submit" disabled={loading} className="flex-1 bg-primary text-white hover:bg-primary/90">
             {loading ? 'Saving...' : 'Save Changes'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
