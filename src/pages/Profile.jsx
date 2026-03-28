@@ -569,7 +569,7 @@ function TaskList({ tasks, empty }) {
             </div>
           </div>
           <div className="flex items-center gap-1 text-sm font-semibold text-amber-500 flex-shrink-0 ml-3">
-            🪙 {task.token_offer}
+            <Coins size={14} /> {task.token_offer}
           </div>
         </Link>
       ))}

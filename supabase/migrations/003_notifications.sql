@@ -52,28 +52,28 @@ declare
     where table_schema = 'public' and table_name = 'notifications' and column_name = 'type'
   );
 begin
-  -- open → accepted (runner clicked Accept, no approval required)
+  -- open → accepted (domi clicked Accept, no approval required)
   if old.status = 'open' and new.status = 'accepted' and new.runner_id is not null then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.poster_id, new.id, 'task_accepted',
-              'Task accepted',
-              'Someone accepted "' || tname || '"');
+              'Doum accepted',
+              'A domi accepted your doum "' || tname || '"');
 
-  -- open → pending_runner_approval (runner applied, poster must approve)
+  -- open → pending_runner_approval (domi applied, poster must approve)
   elsif old.status = 'open' and new.status = 'pending_runner_approval' and new.runner_id is not null then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.poster_id, new.id, 'runner_joined',
-              'Runner wants your task',
-              'A runner applied for "' || tname || '" — approve or reject them.');
+              'Domi wants your doum',
+              'A domi applied for "' || tname || '" — approve or reject them.');
 
-  -- pending_runner_approval → accepted (poster approved runner)
+  -- pending_runner_approval → accepted (poster approved domi)
   elsif old.status = 'pending_runner_approval' and new.status = 'accepted' then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.runner_id, new.id, 'task_accepted',
               'You''ve been approved',
-              'The poster approved you for "' || tname || '"');
+              'The poster approved you as domi for "' || tname || '"');
 
-  -- pending_runner_approval → open (poster rejected runner)
+  -- pending_runner_approval → open (poster rejected domi)
   elsif old.status = 'pending_runner_approval' and new.status = 'open' then
     if old.runner_id is not null then
       insert into public.notifications(user_id, task_id, type, title, body)
@@ -82,19 +82,19 @@ begin
                 'The poster didn''t approve you for "' || tname || '"');
     end if;
 
-  -- accepted → open (runner backed out)
+  -- accepted → open (domi backed out)
   elsif old.status = 'accepted' and new.status = 'open' and new.runner_id is null then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.poster_id, new.id, 'runner_joined',
-              'Runner backed out',
-              'Your runner dropped "' || tname || '" — it''s open again.');
+              'Domi backed out',
+              'Your domi dropped "' || tname || '" — it''s open again.');
 
-  -- accepted → pending_confirmation (runner marked done)
+  -- accepted → pending_confirmation (domi marked done)
   elsif old.status = 'accepted' and new.status = 'pending_confirmation' then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.poster_id, new.id, 'task_pending',
-              'Task marked done',
-              'Your runner says "' || tname || '" is complete. Confirm or dispute.');
+              'Doum marked done',
+              'Your domi says "' || tname || '" is complete. Confirm or dispute.');
 
   -- pending_confirmation → completed (poster confirmed)
   elsif old.status = 'pending_confirmation' and new.status = 'completed' then
@@ -107,7 +107,7 @@ begin
   elsif old.status = 'pending_confirmation' and new.status = 'disputed' then
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.runner_id, new.id, 'task_pending',
-              'Task disputed',
+              'Doum disputed',
               'The poster opened a dispute on "' || tname || '"');
     insert into public.notifications(user_id, task_id, type, title, body)
       values (new.poster_id, new.id, 'task_pending',
