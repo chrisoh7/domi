@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider } from './contexts/AuthContext'
+import { ChatProvider } from './contexts/ChatContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import WelcomeBanner from './components/WelcomeBanner'
 import ActiveDoumWidget from './components/ActiveDoumWidget'
+import ChatSidebar from './components/ChatSidebar'
 import Login from './pages/Login'
 import Feed from './pages/Feed'
 import PostTask from './pages/PostTask'
@@ -18,7 +20,8 @@ function Layout({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="pb-4">{children}</main>
+      <main>{children}</main>
+      <ChatSidebar />
       <WelcomeBanner />
       <ActiveDoumWidget />
     </div>
@@ -29,6 +32,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ChatProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Navigate to="/feed" replace />} />
@@ -59,6 +63,7 @@ export default function App() {
           } />
         </Routes>
         <Toaster richColors position="top-right" />
+        </ChatProvider>
       </AuthProvider>
     </BrowserRouter>
   )

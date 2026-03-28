@@ -2,9 +2,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useState, useEffect } from 'react'
-import { Plus, LayoutGrid, User, LogOut, Coins, Wrench, Shield, Bell } from 'lucide-react'
+import { Plus, LayoutGrid, User, LogOut, Coins, Wrench, Shield, Bell, MessageSquare } from 'lucide-react'
 import { Button } from './ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar'
+import { useChat } from '../contexts/ChatContext'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,6 +27,7 @@ function timeAgo(dateStr) {
 
 export default function Navbar() {
   const { profile, user, isDevMode, toggleDevMode, isAdmin } = useAuth()
+  const { toggle: toggleChat, unreadTotal } = useChat()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -206,6 +208,20 @@ export default function Navbar() {
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Chat button */}
+            <button
+              onClick={toggleChat}
+              className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+              title="Messages"
+            >
+              <MessageSquare size={16} />
+              {unreadTotal > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                  {unreadTotal > 9 ? '9+' : unreadTotal}
+                </span>
+              )}
+            </button>
 
             {/* Dev mode toggle */}
             <button

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, BookOpen } from 'lucide-react'
 import { Button } from './ui/button'
-
 const STORAGE_KEY = 'domi_intro_count'
 const MAX_SHOWS = 3
 
@@ -25,7 +24,18 @@ export default function WelcomeBanner() {
     setVisible(false)
   }
 
-  if (!visible) return null
+  if (!visible) {
+    return (
+      <button
+        onClick={() => setVisible(true)}
+        className="fixed bottom-20 md:bottom-6 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500 text-white text-xs font-semibold shadow-lg hover:bg-sky-600 transition-colors"
+        title="Show intro banner"
+      >
+        <BookOpen size={13} />
+        What is domi?
+      </button>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
