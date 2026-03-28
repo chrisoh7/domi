@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2 } from 'lucide-react'
+import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2, LayoutTemplate } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { timeAgo } from '../lib/utils'
 import { Card } from '../components/ui/card'
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Badge } from '../components/ui/badge'
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar'
 import { useSavedPlaces } from '../hooks/useSavedPlaces'
+import { useDoumTemplates } from '../hooks/useDoumTemplates'
 
 const CAT_META = {
   'Errands & Pickup':    { emoji: '🛍️', color: 'bg-orange-400' },
@@ -56,8 +57,18 @@ export default function Profile() {
   const [newCustomResults, setNewCustomResults] = useState([])
   const [newCustomCoords, setNewCustomCoords] = useState(null)
   const [showPlaces, setShowPlaces] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
   const [showRatings, setShowRatings] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
+
+  const { templates, addTemplate, removeTemplate } = useDoumTemplates(isOwn ? user?.id : null)
+  const TEMPLATE_CATEGORIES = ['Errands & Pickup', 'Tutoring & Academic', 'Moving', 'Tech Help', 'Fitness & Wellness', 'Other']
+  const [newTplName, setNewTplName] = useState('')
+  const [newTplEmoji, setNewTplEmoji] = useState('📋')
+  const [newTplTitle, setNewTplTitle] = useState('')
+  const [newTplDesc, setNewTplDesc] = useState('')
+  const [newTplCategory, setNewTplCategory] = useState('Errands & Pickup')
+  const [showNewTplForm, setShowNewTplForm] = useState(false)
 
   useEffect(() => {
     if (profileId) loadProfile()
@@ -256,18 +267,135 @@ export default function Profile() {
             )}
           </div>
 
-          {/* Set Locations */}
+          {/* Set Locations + Templates */}
           {isOwn && (
             <div className="mt-4 border-t border-gray-100 pt-4">
-              <button
-                type="button"
-                onClick={() => setShowPlaces(v => !v)}
-                className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-              >
-                <MapPin size={14} />
-                Set Locations
-                <span className="text-gray-400 text-xs">{showPlaces ? '▲' : '▼'}</span>
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowPlaces(v => !v); setShowTemplates(false) }}
+                  className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <MapPin size={14} />
+                  Set Locations
+                  <span className="text-gray-400 text-xs">{showPlaces ? '▲' : '▼'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowTemplates(v => !v); setShowPlaces(false) }}
+                  className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <LayoutTemplate size={14} />
+                  Templates
+                  <span className="text-gray-400 text-xs">{showTemplates ? '▲' : '▼'}</span>
+                </button>
+              </div>
+
+              {showTemplates && (
+                <div className="mt-4 space-y-3">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Doum Templates</h3>
+
+                  {templates.length > 0 && (
+                    <div className="space-y-2">
+                      {templates.map(t => (
+                        <div key={t.id} className="border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <span className="text-base flex-shrink-0">{t.emoji}</span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold">{t.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{t.title}</p>
+                                <p className="text-[11px] text-gray-400">{t.category}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeTemplate(t.id)}
+                              className="text-red-400 hover:text-red-600 p-1 flex-shrink-0"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!showNewTplForm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTplForm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary text-primary text-xs font-semibold hover:bg-primary/10"
+                    >
+                      <Plus size={12} /> Add Template
+                    </button>
+                  ) : (
+                    <div className="border border-dashed border-gray-300 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-medium text-gray-500">New template</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newTplEmoji}
+                          onChange={e => setNewTplEmoji(e.target.value)}
+                          maxLength={2}
+                          placeholder="📋"
+                          className="w-12 text-center text-lg border border-gray-300 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <input
+                          type="text"
+                          value={newTplName}
+                          onChange={e => setNewTplName(e.target.value)}
+                          placeholder="Template name (e.g. Weekly groceries)"
+                          className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={newTplTitle}
+                        onChange={e => setNewTplTitle(e.target.value)}
+                        placeholder="Task title"
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <textarea
+                        value={newTplDesc}
+                        onChange={e => setNewTplDesc(e.target.value)}
+                        placeholder="Description"
+                        rows={2}
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                      />
+                      <select
+                        value={newTplCategory}
+                        onChange={e => setNewTplCategory(e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+                      >
+                        {TEMPLATE_CATEGORIES.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowNewTplForm(false); setNewTplName(''); setNewTplEmoji('📋'); setNewTplTitle(''); setNewTplDesc(''); setNewTplCategory('Errands & Pickup') }}
+                          className="flex-1 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!newTplName.trim() || !newTplTitle.trim()}
+                          onClick={() => {
+                            addTemplate({ name: newTplName.trim(), emoji: newTplEmoji || '📋', title: newTplTitle.trim(), description: newTplDesc.trim(), category: newTplCategory })
+                            setShowNewTplForm(false); setNewTplName(''); setNewTplEmoji('📋'); setNewTplTitle(''); setNewTplDesc(''); setNewTplCategory('Errands & Pickup')
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-semibold disabled:opacity-40"
+                        >
+                          <Plus size={12} /> Save Template
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {showPlaces && (
                 <div className="mt-4 space-y-6">

@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { geocodePittsburgh } from '../lib/utils'
 import { useSavedPlaces, PRESET_DEFS } from '../hooks/useSavedPlaces'
+import { useDoumTemplates } from '../hooks/useDoumTemplates'
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
-import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check, Sparkles, GripVertical, Pencil, Trash2, BookmarkPlus, Clock, Calendar } from 'lucide-react'
+import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check, Sparkles, GripVertical, Pencil, Trash2, BookmarkPlus, Clock, Calendar, LayoutTemplate } from 'lucide-react'
 import { moderateContent } from '../lib/moderateContent'
 import { generateSubtasks, hasAiKey } from '../lib/aiSubtasks'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -239,6 +240,10 @@ export default function PostTask() {
   const [geoLoadingIdx, setGeoLoadingIdx] = useState(null)
   const [userPos, setUserPos] = useState(null)
   const debounceRefs = useRef({})
+
+  // Templates
+  const { templates } = useDoumTemplates(profile?.id)
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
 
   // Saved places
   const { allPlaces, presets: savedPresets, custom: savedCustom, savePreset, clearPreset, addCustom, removeCustom } = useSavedPlaces(profile?.id)
@@ -544,6 +549,45 @@ export default function PostTask() {
           {/* ── Step 1: Details ── */}
           {step === 0 && (
             <Card className="p-6 space-y-5">
+              {/* Template picker */}
+              {templates.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePicker(v => !v)}
+                    className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <LayoutTemplate size={14} />
+                    Use a template
+                    <span className="text-gray-400 text-xs">{showTemplatePicker ? '▲' : '▼'}</span>
+                  </button>
+                  {showTemplatePicker && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {templates.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setTitle(t.title)
+                            setDescription(t.description)
+                            setCategory(t.category)
+                            setShowTemplatePicker(false)
+                          }}
+                          className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 text-left transition-colors"
+                        >
+                          <span className="text-xl flex-shrink-0">{t.emoji}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{t.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{t.title}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="border-t border-gray-100" />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="title">Title *</Label>
                 <Input
