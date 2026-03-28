@@ -18,8 +18,8 @@ import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Textarea } from '../components/ui/textarea'
+import { useChat } from '../contexts/ChatContext'
 
 // ── icons ──────────────────────────────────────────────────────────────────
 const userPinIcon = L.divIcon({
@@ -199,6 +199,7 @@ function TaskMap({ task, runnerLivePos }) {
 export default function TaskDetail() {
   const { id } = useParams()
   const { user, profile, refreshProfile, isDevMode } = useAuth()
+  const { open: openChat } = useChat()
   const navigate = useNavigate()
 
   const [task, setTask] = useState(null)
@@ -231,8 +232,6 @@ export default function TaskDetail() {
   // Report modal
   const [reportTarget, setReportTarget] = useState(null)
 
-  // Chat dialog
-  const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {
     fetchTask()
@@ -731,19 +730,9 @@ export default function TaskDetail() {
 
                 {/* Chat button */}
                 {(isPoster || isRunner) && task.runner_id && (
-                  <Dialog open={chatOpen} onOpenChange={setChatOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full">
-                        💬 Open Chat
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>Doum Chat</DialogTitle>
-                      </DialogHeader>
-                      <TaskChat taskId={id} posterId={task.poster_id} runnerId={task.runner_id} taskStatus={task.status} />
-                    </DialogContent>
-                  </Dialog>
+                  <Button variant="outline" className="w-full" onClick={() => openChat(id)}>
+                    💬 Open Chat
+                  </Button>
                 )}
 
                 {/* Report flag button */}

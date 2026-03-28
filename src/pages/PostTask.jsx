@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { geocodePittsburgh } from '../lib/utils'
+import { useSavedPlaces, PRESET_DEFS } from '../hooks/useSavedPlaces'
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
-import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check, Sparkles, GripVertical } from 'lucide-react'
+import { Coins, Zap, MapPin, Navigation, Loader2, UserCheck, ShieldAlert, Plus, X, DollarSign, Package, Handshake, Users, ArrowLeft, ArrowRight, Check, Sparkles, GripVertical, Pencil, Trash2, BookmarkPlus, Clock, Calendar } from 'lucide-react'
 import { moderateContent } from '../lib/moderateContent'
 import { generateSubtasks, hasAiKey } from '../lib/aiSubtasks'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -38,6 +39,34 @@ const DELIVERY_TYPES = [
   { id: 'pickup_only',   emoji: <Users size={20} />,     label: 'Pickup only',   desc: 'Domi picks up only' },
 ]
 
+// ── Deadline helpers ──────────────────────────────────────────────────────────
+function dateAt(daysFromNow, hour) {
+  const d = new Date()
+  d.setDate(d.getDate() + daysFromNow)
+  d.setHours(hour, 0, 0, 0)
+  return d.toISOString().slice(0, 16)
+}
+function nextWeekendAt(hour) {
+  const d = new Date()
+  const daysUntilSat = d.getDay() === 6 ? 7 : (6 - d.getDay())
+  d.setDate(d.getDate() + daysUntilSat)
+  d.setHours(hour, 0, 0, 0)
+  return d.toISOString().slice(0, 16)
+}
+const DEADLINE_PRESETS = [
+  { label: 'Tonight',      getVal: () => dateAt(0, 22) },
+  { label: 'Tomorrow',     getVal: () => dateAt(1, 12) },
+  { label: 'In 2 days',   getVal: () => dateAt(2, 12) },
+  { label: 'This weekend', getVal: () => nextWeekendAt(12) },
+]
+function formatDeadlineDisplay(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+}
+
 function makeStopIcon(num) {
   return L.divIcon({
     className: '',
@@ -48,7 +77,7 @@ function makeStopIcon(num) {
   })
 }
 
-function SortableStepRow({ step, idx, total, geoLoadingIdx, onDescriptionChange, onLocationChange, onBlurLocation, onFocusLocation, onSelectSuggestion, onUseCurrentLocation, onRemove }) {
+function SortableStepRow({ step, idx, total, geoLoadingIdx, onDescriptionChange, onLocationChange, onBlurLocation, onFocusLocation, onSelectSuggestion, onUseCurrentLocation, onRemove, savedPlaces, onSelectSavedPlace }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step.id })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   return (
@@ -83,6 +112,21 @@ function SortableStepRow({ step, idx, total, geoLoadingIdx, onDescriptionChange,
           placeholder="What to do here…"
           className="w-full px-3 py-2 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
         />
+        {savedPlaces?.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {savedPlaces.map(p => (
+              <button
+                key={p.key || p.id}
+                type="button"
+                onClick={() => onSelectSavedPlace(p)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-xs font-medium hover:bg-sky-100 transition-colors"
+              >
+                <span>{p.emoji}</span>
+                <span>{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="relative">
           <input
             type="text"
@@ -178,7 +222,8 @@ export default function PostTask() {
   const [tokenOffer, setTokenOffer] = useState(10)
   const [boost, setBoost] = useState(false)
   const [requiresApproval, setRequiresApproval] = useState(false)
-  const [photoUrl, setPhotoUrl] = useState('')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [moderating, setModerating] = useState(false)
@@ -194,6 +239,21 @@ export default function PostTask() {
   const [geoLoadingIdx, setGeoLoadingIdx] = useState(null)
   const [userPos, setUserPos] = useState(null)
   const debounceRefs = useRef({})
+
+  // Saved places
+  const { allPlaces, presets: savedPresets, custom: savedCustom, savePreset, clearPreset, addCustom, removeCustom } = useSavedPlaces(profile?.id)
+  const [showPlacesManager, setShowPlacesManager] = useState(false)
+  const [editingPreset, setEditingPreset] = useState(null) // key of preset being edited
+  const [presetSearchQuery, setPresetSearchQuery] = useState('')
+  const [presetSearchResults, setPresetSearchResults] = useState([])
+  const [newCustomName, setNewCustomName] = useState('')
+  const [newCustomEmoji, setNewCustomEmoji] = useState('📍')
+  const [newCustomQuery, setNewCustomQuery] = useState('')
+  const [newCustomResults, setNewCustomResults] = useState([])
+  const [newCustomCoords, setNewCustomCoords] = useState(null)
+
+  // Deadline
+  const [deadlinePreset, setDeadlinePreset] = useState(null) // label string or 'custom'
 
   const totalCost = tokenOffer + (boost ? 10 : 0)
   const canAfford = isDevMode || (profile?.token_balance ?? 0) >= totalCost
@@ -282,6 +342,45 @@ export default function PostTask() {
     } catch {}
   }
 
+  // Saved places geocoding
+  async function searchPresetLocation(val) {
+    setPresetSearchQuery(val)
+    if (val.length < 2) { setPresetSearchResults([]); return }
+    try {
+      const r = await geocodePittsburgh(val, userPos?.[0], userPos?.[1], 5)
+      setPresetSearchResults(r)
+    } catch {}
+  }
+
+  function selectPresetResult(key, s) {
+    savePreset(key, { label: s.display_name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) })
+    setEditingPreset(null)
+    setPresetSearchQuery('')
+    setPresetSearchResults([])
+  }
+
+  async function searchCustomLocation(val) {
+    setNewCustomQuery(val)
+    setNewCustomCoords(null)
+    if (val.length < 2) { setNewCustomResults([]); return }
+    try {
+      const r = await geocodePittsburgh(val, userPos?.[0], userPos?.[1], 5)
+      setNewCustomResults(r)
+    } catch {}
+  }
+
+  function selectCustomResult(s) {
+    setNewCustomQuery(s.display_name)
+    setNewCustomCoords({ label: s.display_name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) })
+    setNewCustomResults([])
+  }
+
+  function submitNewCustom() {
+    if (!newCustomName.trim() || !newCustomCoords) return
+    addCustom({ name: newCustomName.trim(), emoji: newCustomEmoji, ...newCustomCoords })
+    setNewCustomName(''); setNewCustomEmoji('📍'); setNewCustomQuery(''); setNewCustomCoords(null)
+  }
+
   function acceptAiSuggestion() {
     if (aiPreview?.steps?.length > 0) {
       const newSteps = aiPreview.steps.map(s => ({ ...newStep(), description: s.description, label: s.location, query: s.location }))
@@ -291,8 +390,7 @@ export default function PostTask() {
     setAiPreview(null)
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit() {
     setError('')
     setLoading(true)
 
@@ -318,6 +416,17 @@ export default function PostTask() {
       .map(s => ({ label: s.label, lat: s.lat, lng: s.lng, description: s.description }))
     const firstStop = locationStops[0] ?? null
 
+    // Upload photo if selected
+    let uploadedPhotoUrl = null
+    if (photoFile) {
+      const ext = photoFile.name.split('.').pop()
+      const path = `tasks/${profile.id}_${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, photoFile, { upsert: true })
+      if (uploadError) { setError(uploadError.message); setLoading(false); return }
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      uploadedPhotoUrl = publicUrl
+    }
+
     const { data: task, error: taskError } = await supabase
       .from('tasks')
       .insert({
@@ -337,7 +446,7 @@ export default function PostTask() {
         delivery_type: deliveryType,
         boosted: boost,
         requires_approval: requiresApproval,
-        photo_url: photoUrl || null,
+        photo_url: uploadedPhotoUrl,
         subtasks: steps.filter(s => s.description.trim()).map(s => ({ text: s.description.trim(), completed: false, location: s.label || null })),
         status: 'open',
         flagged: false,
@@ -431,7 +540,7 @@ export default function PostTask() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit}>
+        <div>
           {/* ── Step 1: Details ── */}
           {step === 0 && (
             <Card className="p-6 space-y-5">
@@ -498,14 +607,28 @@ export default function PostTask() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="photoUrl">Photo URL (optional)</Label>
-                <Input
-                  id="photoUrl"
-                  type="url"
-                  value={photoUrl}
-                  onChange={e => setPhotoUrl(e.target.value)}
-                  placeholder="https://..."
+                <Label htmlFor="photoFile">Photo (optional)</Label>
+                <input
+                  id="photoFile"
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                  onChange={e => {
+                    const f = e.target.files?.[0] || null
+                    setPhotoFile(f)
+                    setPhotoPreview(f ? URL.createObjectURL(f) : null)
+                  }}
                 />
+                {photoPreview && (
+                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
+                    <img src={photoPreview} alt="preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
+                      className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs leading-none"
+                    >×</button>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -605,6 +728,8 @@ export default function PostTask() {
                           onSelectSuggestion={sg => selectStepSuggestion(idx, sg)}
                           onUseCurrentLocation={() => useCurrentLocationForStep(idx)}
                           onRemove={() => removeStep(idx)}
+                          savedPlaces={allPlaces}
+                          onSelectSavedPlace={p => selectStepSuggestion(idx, { display_name: p.label, lat: String(p.lat), lon: String(p.lng) })}
                         />
                       ))}
                     </div>
@@ -651,16 +776,172 @@ export default function PostTask() {
                 )}
               </div>
 
+              {/* Saved Places Manager */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPlacesManager(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-sky-600 font-medium hover:underline"
+                >
+                  <BookmarkPlus size={13} />
+                  {showPlacesManager ? 'Hide' : 'Manage'} saved places
+                </button>
+
+                {showPlacesManager && (
+                  <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-4">
+                    {/* Presets */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Presets</p>
+                      {savedPresets.map(p => (
+                        <div key={p.key} className="flex items-center gap-2">
+                          <span className="text-lg w-7 text-center">{p.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-700">{p.name}</p>
+                            {p.isSet
+                              ? <p className="text-xs text-gray-400 truncate">{p.label}</p>
+                              : <p className="text-xs text-gray-300 italic">Not set</p>
+                            }
+                            {editingPreset === p.key && (
+                              <div className="relative mt-1">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={presetSearchQuery}
+                                  onChange={e => searchPresetLocation(e.target.value)}
+                                  placeholder="Search address…"
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-input text-xs focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                                />
+                                {presetSearchResults.length > 0 && (
+                                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-border rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                                    {presetSearchResults.map((s, i) => (
+                                      <button key={i} type="button" onMouseDown={() => selectPresetResult(p.key, s)}
+                                        className="w-full text-left px-3 py-2 hover:bg-accent text-xs border-b border-border last:border-0">
+                                        <div className="font-medium truncate">{s.display_name.split(',')[0]}</div>
+                                        <div className="text-gray-400 truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button type="button" onClick={() => { setEditingPreset(editingPreset === p.key ? null : p.key); setPresetSearchQuery(''); setPresetSearchResults([]) }}
+                              className="p-1.5 rounded-lg hover:bg-sky-100 text-sky-500 transition-colors">
+                              <Pencil size={12} />
+                            </button>
+                            {p.isSet && (
+                              <button type="button" onClick={() => clearPreset(p.key)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Custom places */}
+                    {savedCustom.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Custom</p>
+                        {savedCustom.map(c => (
+                          <div key={c.id} className="flex items-center gap-2">
+                            <span className="text-lg w-7 text-center">{c.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-700">{c.name}</p>
+                              <p className="text-xs text-gray-400 truncate">{c.label}</p>
+                            </div>
+                            <button type="button" onClick={() => removeCustom(c.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add custom */}
+                    <div className="space-y-2 pt-2 border-t border-sky-100">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add custom place</p>
+                      <div className="flex gap-2">
+                        <input type="text" value={newCustomEmoji} onChange={e => setNewCustomEmoji(e.target.value)}
+                          placeholder="📍" maxLength={2}
+                          className="w-10 px-2 py-1.5 text-center rounded-lg border border-input text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <input type="text" value={newCustomName} onChange={e => setNewCustomName(e.target.value)}
+                          placeholder="Name (e.g. Gym)"
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-input text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary" />
+                      </div>
+                      <div className="relative">
+                        <input type="text" value={newCustomQuery} onChange={e => searchCustomLocation(e.target.value)}
+                          placeholder="Search address…"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-input text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary" />
+                        {newCustomResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 z-20 bg-white border border-border rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                            {newCustomResults.map((s, i) => (
+                              <button key={i} type="button" onMouseDown={() => selectCustomResult(s)}
+                                className="w-full text-left px-3 py-2 hover:bg-accent text-xs border-b border-border last:border-0">
+                                <div className="font-medium truncate">{s.display_name.split(',')[0]}</div>
+                                <div className="text-gray-400 truncate">{s.display_name.split(',').slice(1, 3).join(',')}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {newCustomCoords && <p className="text-xs text-green-600 font-medium">✓ {newCustomCoords.label.split(',')[0]}</p>}
+                      <button type="button" onClick={submitNewCustom}
+                        disabled={!newCustomName.trim() || !newCustomCoords}
+                        className="w-full py-1.5 bg-sky-500 text-white rounded-lg text-xs font-semibold hover:bg-sky-600 disabled:opacity-40 transition-colors">
+                        Save place
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Deadline */}
               <div className="space-y-2">
-                <Label htmlFor="deadline">Deadline</Label>
-                <Input
-                  id="deadline"
-                  type="datetime-local"
-                  value={deadlineAt}
-                  onChange={e => setDeadlineAt(e.target.value)}
-                  min={minDateTime}
-                />
+                <Label className="flex items-center gap-1.5">
+                  <Clock size={14} />
+                  Deadline
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {DEADLINE_PRESETS.map(p => (
+                    <Button key={p.label} type="button" size="sm"
+                      variant={deadlinePreset === p.label ? 'default' : 'outline'}
+                      onClick={() => { setDeadlinePreset(p.label); setDeadlineAt(p.getVal()) }}
+                      className={`rounded-full text-xs ${deadlinePreset === p.label ? 'bg-primary text-white hover:bg-primary/90' : ''}`}
+                    >
+                      {p.label}
+                    </Button>
+                  ))}
+                  <Button type="button" size="sm"
+                    variant={deadlinePreset === 'custom' ? 'default' : 'outline'}
+                    onClick={() => { setDeadlinePreset('custom'); setDeadlineAt('') }}
+                    className={`rounded-full text-xs ${deadlinePreset === 'custom' ? 'bg-primary text-white hover:bg-primary/90' : ''}`}
+                  >
+                    <Calendar size={11} className="mr-1" />
+                    Custom
+                  </Button>
+                  {deadlinePreset && (
+                    <Button type="button" size="sm" variant="ghost"
+                      onClick={() => { setDeadlinePreset(null); setDeadlineAt('') }}
+                      className="rounded-full text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={11} />
+                    </Button>
+                  )}
+                </div>
+                {deadlinePreset === 'custom' && (
+                  <Input type="datetime-local" value={deadlineAt}
+                    onChange={e => setDeadlineAt(e.target.value)} min={minDateTime} />
+                )}
+                {deadlineAt && deadlinePreset !== 'custom' && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    <Clock size={13} className="text-primary" />
+                    Due {formatDeadlineDisplay(deadlineAt)}
+                  </p>
+                )}
               </div>
             </Card>
           )}
@@ -795,7 +1076,8 @@ export default function PostTask() {
               </Button>
             ) : (
               <Button
-                type="submit"
+                type="button"
+                onClick={handleSubmit}
                 disabled={loading || (!canAfford && !isDevMode)}
                 className="flex-1 bg-primary text-white hover:bg-primary/90"
               >
@@ -821,7 +1103,7 @@ export default function PostTask() {
           {step < STEPS.length - 1 && error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{error}</p>
           )}
-        </form>
+        </div>
       </div>
     </div>
   )

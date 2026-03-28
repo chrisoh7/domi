@@ -162,7 +162,7 @@ export default function ChatSidebar() {
 
       {/* Sidebar panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-80 bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-14 right-0 h-[calc(100vh-3.5rem)] w-80 bg-white border-l border-gray-200 shadow-2xl z-40 flex flex-col transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

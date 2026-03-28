@@ -105,7 +105,10 @@ export default function Navbar() {
 
           {/* Left: Logo */}
           <Link to="/feed" className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-primary font-bold text-xl tracking-tight">do</span><span className="text-[#1A1A2E] font-bold text-xl tracking-tight">mi</span>
+            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+              <span className="text-2xl">👋</span>
+            </div>
+            <span className="text-2xl tracking-tight font-semibold">Domi</span>
             {isDevMode && (
               <span className="px-1.5 py-0.5 bg-amber-400 text-amber-900 text-[10px] font-bold rounded-full leading-none">
                 DEV
@@ -117,7 +120,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
             {/* Nav links */}
             <div className="hidden md:flex items-center gap-1 mr-1">
-              {navLink('/feed', 'Doum', LayoutGrid)}
+              {navLink('/feed', 'Browse Doums', LayoutGrid)}
               {isAdmin && navLink('/admin', 'Admin', Shield)}
             </div>
 
@@ -273,7 +276,7 @@ export default function Navbar() {
           }`}
         >
           <LayoutGrid size={20} />
-          <span>Doum</span>
+          <span>Browse</span>
         </Link>
         <Link
           to="/post"
