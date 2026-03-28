@@ -11,6 +11,7 @@ import { estimateCommute } from '../lib/utils'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { WheelPanAndCtrlZoom, MapRecenterControl } from '../components/LeafletMapControls'
 import TaskChat from '../components/TaskChat'
 import ReportUserModal from '../components/ReportUserModal'
 import { Button } from '../components/ui/button'
@@ -145,6 +146,8 @@ function TaskMap({ task, runnerLivePos }) {
     <div>
       <div className="rounded-xl overflow-hidden" style={{ position: 'relative', zIndex: 0 }}>
         <MapContainer center={stopPositions[0]} zoom={15} style={{ height: 220, width: '100%' }} scrollWheelZoom={false}>
+          <WheelPanAndCtrlZoom />
+          <MapRecenterControl positions={allPositions} focusPosition={stopPositions[0] ?? null} />
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {positionedStops.map((stop, idx) => (
             <Marker key={idx} position={[stop.lat, stop.lng]} icon={makeStopIcon(idx + 1, multiStop)}>

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap } from 'react-leaflet'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Circle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Circle, Camera } from 'lucide-react'
+import { WheelPanAndCtrlZoom, MapRecenterControl } from './LeafletMapControls'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const CMU_CENTER = [40.4432, -79.9428]
+const ACTIVE_TASK_STATUSES = ['accepted']
 
 function makeStepIcon(num, completed) {
   const fill = completed ? '#9ca3af' : '#C41230'
@@ -18,33 +21,50 @@ function makeStepIcon(num, completed) {
   })
 }
 
-function MapFitBounds({ positions }) {
+function MapViewportController({ positions, focusPosition, focusKey }) {
   const map = useMap()
-  const prev = useRef('')
+  const prevBounds = useRef('')
+  const prevFocus = useRef('')
+
   useEffect(() => {
     const key = JSON.stringify(positions)
-    if (key === prev.current || positions.length === 0) return
-    prev.current = key
+    if (key === prevBounds.current || positions.length === 0) return
+    prevBounds.current = key
     if (positions.length === 1) {
-      map.flyTo(positions[0], 15, { duration: 0.5 })
+      map.setView(positions[0], 15, { animate: false })
     } else {
       map.fitBounds(positions, { padding: [28, 28], maxZoom: 16 })
     }
   }, [JSON.stringify(positions)]) // eslint-disable-line
+
+  useEffect(() => {
+    if (!focusPosition) return
+    const key = `${focusKey}:${focusPosition.join(',')}`
+    if (key === prevFocus.current) return
+    prevFocus.current = key
+    map.flyTo(focusPosition, 16, { duration: 0.5 })
+  }, [focusKey, JSON.stringify(focusPosition)]) // eslint-disable-line
+
   return null
 }
 
 export default function ActiveDoumWidget() {
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const [tasks, setTasks] = useState([])
   // role: 'receiving' (I'm poster) | 'serving' (I'm domi)
   const [role, setRole] = useState('serving')
   const [indices, setIndices] = useState({ receiving: 0, serving: 0 })
   const [collapsed, setCollapsed] = useState(false)
+  const [showCompletePromptTaskId, setShowCompletePromptTaskId] = useState(null)
+  const [completionPhoto, setCompletionPhoto] = useState(null)
+  const [completionError, setCompletionError] = useState('')
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [markingDone, setMarkingDone] = useState(false)
 
   const [myPos, setMyPos] = useState(null)
-  const [otherPos, setOtherPos] = useState(null)
+  const [otherPresence, setOtherPresence] = useState({ taskId: null, pos: null })
 
   const channelRef = useRef(null)
   const watchIdRef = useRef(null)
@@ -65,11 +85,26 @@ export default function ActiveDoumWidget() {
   const idx  = Math.min(indices[effectiveRole], Math.max(0, list.length - 1))
   const task = list[idx] ?? null
   const isDomi = task?.runner_id === user?.id
+  const otherPos = otherPresence.taskId === task?.id ? otherPresence.pos : null
 
-  const steps    = task?.location_stops ?? []
-  const subtasks = task?.subtasks ?? []
-  const stepPositions = steps.filter(s => s.lat && s.lng).map(s => [s.lat, s.lng])
+  const steps = Array.isArray(task?.location_stops) ? task.location_stops : []
+  const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : []
+  const stepPositions = steps.filter(s => s.lat != null && s.lng != null).map(s => [s.lat, s.lng])
   const completedCount = subtasks.filter(s => s.completed).length
+  const nextIncompleteIdx = subtasks.findIndex(s => !s.completed)
+  const activeStepIdx = nextIncompleteIdx === -1
+    ? Math.max(Math.min(subtasks.length - 1, steps.length - 1), 0)
+    : nextIncompleteIdx
+  const previousCompletedIdx = nextIncompleteIdx > 0 ? nextIncompleteIdx - 1 : null
+  const activeStepPosition = steps[activeStepIdx]?.lat != null && steps[activeStepIdx]?.lng != null
+    ? [steps[activeStepIdx].lat, steps[activeStepIdx].lng]
+    : null
+  const highlightedRoute = previousCompletedIdx != null
+    ? [steps[previousCompletedIdx], steps[activeStepIdx]]
+        .filter(step => step?.lat != null && step?.lng != null)
+        .map(step => [step.lat, step.lng])
+    : []
+  const showCompletePrompt = showCompletePromptTaskId === task?.id && task?.status === 'accepted' && subtasks.length > 0 && completedCount === subtasks.length
 
   // all positions for map bounds: steps + live dots
   const allPositions = [
@@ -86,7 +121,7 @@ export default function ActiveDoumWidget() {
       const { data } = await supabase
         .from('tasks')
         .select('id, title, status, poster_id, runner_id, location_stops, subtasks')
-        .eq('status', 'in_progress')
+        .in('status', ACTIVE_TASK_STATUSES)
         .or(`poster_id.eq.${user.id},runner_id.eq.${user.id}`)
       const loaded = data ?? []
       setTasks(loaded)
@@ -132,7 +167,6 @@ export default function ActiveDoumWidget() {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current)
       channelRef.current = null
-      setOtherPos(null)
     }
     if (!task || !user?.id) return
 
@@ -144,9 +178,10 @@ export default function ActiveDoumWidget() {
     ch.on('presence', { event: 'sync' }, () => {
       const state = ch.presenceState()
       const other = state[otherUserId]?.[0]
-      if (other?.lat != null && other?.lng != null) {
-        setOtherPos([other.lat, other.lng])
-      }
+      setOtherPresence({
+        taskId: task.id,
+        pos: other?.lat != null && other?.lng != null ? [other.lat, other.lng] : null,
+      })
     })
     ch.subscribe(async status => {
       if (status === 'SUBSCRIBED' && myPos) {
@@ -168,13 +203,62 @@ export default function ActiveDoumWidget() {
 
   // ── step completion toggle (domi only) ───────────────────────────────────
   async function toggleStep(stepIdx) {
-    if (!isDomi || !task) return
+    if (!isDomi || !task || stepIdx !== nextIncompleteIdx) return
     const updated = subtasks.map((s, i) =>
-      i === stepIdx ? { ...s, completed: !s.completed } : s
+      i === stepIdx ? { ...s, completed: true } : s
     )
+    const allDone = updated.length > 0 && updated.every(s => s.completed)
     // optimistic
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: updated } : t))
+    if (allDone) {
+      setShowCompletePromptTaskId(task.id)
+      setCompletionError('')
+    }
     await supabase.from('tasks').update({ subtasks: updated }).eq('id', task.id)
+  }
+
+  async function uploadCompletionPhoto(file) {
+    setPhotoUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${task.id}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await supabase.storage.from('completion_photos').upload(path, file, { upsert: true })
+    setPhotoUploading(false)
+    if (uploadErr) {
+      setCompletionError(uploadErr.message)
+      return null
+    }
+    const { data: { publicUrl } } = supabase.storage.from('completion_photos').getPublicUrl(path)
+    return publicUrl
+  }
+
+  async function handleMarkTaskCompleted() {
+    if (!task) return
+    setMarkingDone(true)
+    setCompletionError('')
+    let photoUrl = null
+    if (completionPhoto) {
+      photoUrl = await uploadCompletionPhoto(completionPhoto)
+      if (!photoUrl) {
+        setMarkingDone(false)
+        return
+      }
+    }
+
+    const { error } = await supabase.from('tasks').update({
+      status: 'pending_confirmation',
+      marked_done_at: new Date().toISOString(),
+      ...(photoUrl ? { completion_photo_url: photoUrl } : {}),
+    }).eq('id', task.id)
+
+    if (error) {
+      setCompletionError(error.message)
+      setMarkingDone(false)
+      return
+    }
+
+    setShowCompletePromptTaskId(null)
+    setCompletionPhoto(null)
+    setMarkingDone(false)
   }
 
   // ── swipe ────────────────────────────────────────────────────────────────
@@ -194,9 +278,9 @@ export default function ActiveDoumWidget() {
   if (tasks.length === 0) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[1000] flex justify-center pointer-events-none">
+    <div className="fixed inset-x-0 bottom-0 z-[1000] flex justify-center pointer-events-none md:inset-x-auto md:bottom-4 md:left-4 md:justify-start">
       <div
-        className="w-full max-w-lg pointer-events-auto"
+        className="w-full max-w-lg pointer-events-auto md:w-[26rem]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -292,6 +376,16 @@ export default function ActiveDoumWidget() {
                   </div>
                 </div>
 
+                <div className="px-4 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/task/${task.id}`)}
+                    className="text-xs font-medium text-primary hover:opacity-80 transition-opacity"
+                  >
+                    View doum details
+                  </button>
+                </div>
+
                 {/* Step progress bar */}
                 {subtasks.length > 0 && (
                   <div className="px-4 pb-2 flex gap-0.5">
@@ -318,11 +412,20 @@ export default function ActiveDoumWidget() {
                       zoomControl={false}
                       attributionControl={false}
                     >
+                      <WheelPanAndCtrlZoom />
+                      <MapRecenterControl
+                        positions={allPositions.length > 0 ? allPositions : stepPositions}
+                        focusPosition={activeStepPosition}
+                      />
                       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <MapFitBounds positions={allPositions.length > 0 ? allPositions : stepPositions} />
+                      <MapViewportController
+                        positions={allPositions.length > 0 ? allPositions : stepPositions}
+                        focusPosition={activeStepPosition}
+                        focusKey={`${task.id}:${activeStepIdx}:${completedCount}`}
+                      />
 
                       {/* Step markers */}
-                      {steps.filter(s => s.lat && s.lng).map((s, i) => (
+                      {steps.filter(s => s.lat != null && s.lng != null).map((s, i) => (
                         <Marker
                           key={i}
                           position={[s.lat, s.lng]}
@@ -332,7 +435,10 @@ export default function ActiveDoumWidget() {
 
                       {/* Route polyline */}
                       {stepPositions.length >= 2 && (
-                        <Polyline positions={stepPositions} color="#C41230" weight={2} dashArray="6 4" />
+                        <Polyline positions={stepPositions} color="#cbd5e1" weight={2} dashArray="6 4" />
+                      )}
+                      {highlightedRoute.length >= 2 && (
+                        <Polyline positions={highlightedRoute} color="#C41230" weight={4} />
                       )}
 
                       {/* My live position — blue */}
@@ -376,14 +482,17 @@ export default function ActiveDoumWidget() {
                 {/* Steps list */}
                 {subtasks.length > 0 && (
                   <div className="px-4 pb-3 space-y-1.5 max-h-28 overflow-y-auto">
-                    {subtasks.map((s, i) => (
+                    {subtasks.map((s, i) => {
+                      const isNextAction = i === nextIncompleteIdx
+                      const isLocked = isDomi && !s.completed && !isNextAction
+                      return (
                       <button
                         key={i}
                         type="button"
                         onClick={() => toggleStep(i)}
-                        disabled={!isDomi}
+                        disabled={!isDomi || !isNextAction}
                         className={`w-full flex items-center gap-2.5 text-left py-0.5 ${
-                          isDomi ? 'hover:opacity-70 transition-opacity' : 'cursor-default'
+                          isDomi && isNextAction ? 'hover:opacity-70 transition-opacity' : 'cursor-default opacity-70'
                         }`}
                       >
                         {s.completed
@@ -398,11 +507,66 @@ export default function ActiveDoumWidget() {
                             {s.location.split(',')[0]}
                           </span>
                         )}
+                        {isLocked && (
+                          <span className="text-[10px] text-amber-500 flex-shrink-0">
+                            Wait
+                          </span>
+                        )}
                       </button>
-                    ))}
+                      )
+                    })}
                     {isDomi && (
-                      <p className="text-[10px] text-gray-400 pt-0.5">Tap a step to mark it complete</p>
+                      <p className="text-[10px] text-gray-400 pt-0.5">Complete steps in order. The map follows the next step automatically.</p>
                     )}
+                  </div>
+                )}
+
+                {showCompletePrompt && (
+                  <div className="mx-4 mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1A1A2E]">All subtasks are complete</p>
+                      <p className="text-xs text-gray-500 mt-1">Is the doum finished? You can add an optional image, then mark the whole task as completed.</p>
+                    </div>
+
+                    <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-4 transition-colors ${completionPhoto ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-primary'}`}>
+                      <Camera size={18} className={completionPhoto ? 'text-green-600' : 'text-gray-400'} />
+                      <span className="text-xs text-gray-500">{completionPhoto ? completionPhoto.name : 'Add optional image'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          setCompletionError('')
+                          setCompletionPhoto(e.target.files?.[0] ?? null)
+                        }}
+                      />
+                    </label>
+
+                    {completionError && (
+                      <p className="text-xs text-red-500">{completionError}</p>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCompletePromptTaskId(null)
+                          setCompletionPhoto(null)
+                          setCompletionError('')
+                        }}
+                        className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                      >
+                        Not yet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleMarkTaskCompleted}
+                        disabled={markingDone || photoUploading}
+                        className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        {photoUploading ? 'Uploading...' : markingDone ? 'Marking...' : 'Mark as completed'}
+                      </button>
+                    </div>
                   </div>
                 )}
 

@@ -12,6 +12,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { WheelPanAndCtrlZoom, MapRecenterControl } from '../components/LeafletMapControls'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { Input } from '../components/ui/input'
@@ -627,6 +628,8 @@ export default function PostTask() {
                     style={{ height: 220, width: '100%' }}
                     scrollWheelZoom={false}
                   >
+                    <WheelPanAndCtrlZoom />
+                    <MapRecenterControl positions={stepPositions} focusPosition={stepPositions[0] ?? null} />
                     <TileLayer
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
