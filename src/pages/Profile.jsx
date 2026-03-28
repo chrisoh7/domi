@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2, LayoutTemplate } from 'lucide-react'
+import { Coins, Star, AlertTriangle, CheckCircle, Clock, ListTodo, ShieldCheck, Camera, X, Award, MapPin, Plus, Trash2, LayoutTemplate, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { timeAgo } from '../lib/utils'
 import { Card } from '../components/ui/card'
@@ -195,6 +195,12 @@ export default function Profile() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-2">
                 <h1 className="text-2xl font-bold">{profile.name}</h1>
+                {profile.is_super_domi && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 text-sky-600 text-xs font-semibold">
+                    <Sparkles size={11} />
+                    Super Domi
+                  </span>
+                )}
                 {profile.suspended && (
                   <Badge variant="destructive">Suspended</Badge>
                 )}

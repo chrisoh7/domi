@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useState, useEffect } from 'react'
-import { Plus, LayoutGrid, User, LogOut, Coins, Wrench, Shield, Bell, MessageSquare } from 'lucide-react'
+import { Plus, LayoutGrid, User, LogOut, Coins, Wrench, Shield, Bell, MessageSquare, Heart } from 'lucide-react'
 import { Button } from './ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar'
 import { useChat } from '../contexts/ChatContext'
@@ -105,6 +105,9 @@ export default function Navbar() {
 
           {/* Left: Logo */}
           <Link to="/feed" className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-8 h-8 bg-sky-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Heart size={16} className="fill-white text-white" />
+            </div>
             <span className="text-2xl tracking-tight font-semibold">Domi</span>
             {isDevMode && (
               <span className="px-1.5 py-0.5 bg-amber-400 text-amber-900 text-[10px] font-bold rounded-full leading-none">

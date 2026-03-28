@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Coins, CreditCard, CheckCircle, Wrench, Gift, ShoppingBag, Check } from 'lucide-react'
+import { Coins, CreditCard, CheckCircle, Wrench, Gift, ShoppingBag, Check, Sparkles, Zap, Bell, Star, TrendingUp } from 'lucide-react'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -9,10 +9,28 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 
+// Standard minimums (non-subscribers)
 const GIFT_CARDS = [
-  { id: 'amazon',    brand: 'Amazon',    logo: '📦', ratePerToken: 0.08, minTokens: 50  },
-  { id: 'starbucks', brand: 'Starbucks', logo: '☕', ratePerToken: 0.10, minTokens: 30  },
-  { id: 'visa',      brand: 'Visa',      logo: '💳', ratePerToken: 0.07, minTokens: 100 },
+  { id: 'amazon',    brand: 'Amazon',    logo: '📦', ratePerToken: 0.08, minTokens: 100 },
+  { id: 'starbucks', brand: 'Starbucks', logo: '☕', ratePerToken: 0.10, minTokens: 60  },
+  { id: 'visa',      brand: 'Visa',      logo: '💳', ratePerToken: 0.07, minTokens: 200 },
+]
+
+// Super Domi perks applied on top of standard rates
+const SUPER_DOMI_PERKS = {
+  bonusTokenPct:      15,    // +15% tokens on every completed doum
+  extraRatePerToken:  0.01,  // +$0.01/token on all gift card redemptions
+  minTokensDivisor:   2,     // minimums halved vs standard
+  price:              4.99,  // $/month
+}
+
+const SUPER_DOMI_FEATURES = [
+  { icon: TrendingUp, label: '+15% token bonus',       desc: 'Earn 15% more tokens on every completed doum' },
+  { icon: Bell,       label: 'Early access',            desc: 'See new doums 2 minutes before everyone else' },
+  { icon: Star,       label: 'Super Domi badge',        desc: 'Verified badge on your profile and task applications' },
+  { icon: Coins,      label: 'Better redemption rates', desc: '+$0.01/token on all gift card brands' },
+  { icon: Gift,       label: 'Lower minimums',          desc: 'Redeem with half the standard token minimum' },
+  { icon: Zap,        label: 'Priority placement',      desc: 'Your applications show first when posters review' },
 ]
 
 const PACKS = [
@@ -23,6 +41,7 @@ const PACKS = [
 
 export default function TokenShop() {
   const { profile, refreshProfile, isDevMode } = useAuth()
+  const isSuperDomi = profile?.is_super_domi ?? false
   const [selected, setSelected] = useState(1)
   const [step, setStep] = useState('select') // 'select' | 'payment' | 'success'
   const [cardNumber, setCardNumber] = useState('')
@@ -42,7 +61,24 @@ export default function TokenShop() {
   const pack = PACKS[selected]
   const gc = GIFT_CARDS.find(g => g.id === redeemGiftCardId) || GIFT_CARDS[0]
   const redeemTokensNum = parseInt(redeemTokens || '0') || 0
-  const cashValue = (redeemTokensNum * gc.ratePerToken).toFixed(2)
+  const effectiveRate = gc.ratePerToken + (isSuperDomi ? SUPER_DOMI_PERKS.extraRatePerToken : 0)
+  const effectiveMin  = isSuperDomi ? Math.floor(gc.minTokens / SUPER_DOMI_PERKS.minTokensDivisor) : gc.minTokens
+  const cashValue = (redeemTokensNum * effectiveRate).toFixed(2)
+
+  async function handleSubscribe() {
+    setLoading(true)
+    await supabase.from('profiles').update({ is_super_domi: true }).eq('id', profile.id)
+    await supabase.from('token_ledger').insert({ user_id: profile.id, amount: 0, reason: 'Super Domi subscription activated ($4.99/mo)' })
+    await refreshProfile()
+    setLoading(false)
+  }
+
+  async function handleUnsubscribe() {
+    setLoading(true)
+    await supabase.from('profiles').update({ is_super_domi: false }).eq('id', profile.id)
+    await refreshProfile()
+    setLoading(false)
+  }
 
   async function handleDevAddTokens() {
     setLoading(true)
@@ -95,11 +131,11 @@ export default function TokenShop() {
     e.preventDefault()
     setRedeemError('')
     const tokens = redeemTokensNum
-    if (!tokens || tokens < gc.minTokens) { setRedeemError(`Minimum ${gc.minTokens} tokens for ${gc.brand}.`); return }
+    if (!tokens || tokens < effectiveMin) { setRedeemError(`Minimum ${effectiveMin} tokens for ${gc.brand}.`); return }
     if (tokens > (profile?.token_balance ?? 0)) { setRedeemError('Insufficient token balance.'); return }
     if (!redeemEmail) { setRedeemError('Email is required.'); return }
     setLoading(true)
-    const value = (tokens * gc.ratePerToken).toFixed(2)
+    const value = (tokens * effectiveRate).toFixed(2)
     const { error: err } = await supabase.from('gift_card_redemptions').insert({
       user_id: profile.id,
       brand: gc.brand,
@@ -263,7 +299,7 @@ export default function TokenShop() {
 
         {/* Main Tabs */}
         <Tabs defaultValue="buy" className="space-y-6">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-3">
             <TabsTrigger value="buy" className="flex items-center gap-2">
               <CreditCard size={15} />
               Buy Tokens
@@ -271,6 +307,11 @@ export default function TokenShop() {
             <TabsTrigger value="redeem" className="flex items-center gap-2">
               <Gift size={15} />
               Redeem
+            </TabsTrigger>
+            <TabsTrigger value="super" className="flex items-center gap-1.5">
+              <Sparkles size={14} />
+              Super Domi
+              {isSuperDomi && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
             </TabsTrigger>
           </TabsList>
 
@@ -384,7 +425,12 @@ export default function TokenShop() {
                           className="pl-10"
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Minimum: {gc.minTokens} tokens</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Minimum: {effectiveMin} tokens
+                        {isSuperDomi && gc.minTokens !== effectiveMin && (
+                          <span className="ml-1 text-sky-500 font-medium">(Super Domi rate)</span>
+                        )}
+                      </p>
                     </div>
 
                     <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
@@ -394,7 +440,12 @@ export default function TokenShop() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Gift Card Value:</span>
-                        <span className="text-xl font-semibold text-primary">${cashValue}</span>
+                        <div className="flex items-center gap-2">
+                          {isSuperDomi && (
+                            <span className="text-xs text-sky-500 font-medium">+$0.01/token</span>
+                          )}
+                          <span className="text-xl font-semibold text-primary">${cashValue}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -416,7 +467,7 @@ export default function TokenShop() {
 
                     <Button
                       type="submit"
-                      disabled={loading || !redeemEmail || redeemTokensNum < gc.minTokens || redeemTokensNum > (profile?.token_balance ?? 0)}
+                      disabled={loading || !redeemEmail || redeemTokensNum < effectiveMin || redeemTokensNum > (profile?.token_balance ?? 0)}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
                       <Gift size={16} className="mr-2" />
@@ -439,6 +490,81 @@ export default function TokenShop() {
                 </Card>
               </div>
             )}
+          </TabsContent>
+          {/* Super Domi Tab */}
+          <TabsContent value="super">
+            <div className="max-w-2xl mx-auto space-y-5">
+
+              {/* Status card */}
+              {isSuperDomi ? (
+                <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 p-6 text-white">
+                  <div className="flex items-center gap-3 mb-1">
+                    <Sparkles size={22} />
+                    <span className="text-lg font-bold">You're Super Domi</span>
+                  </div>
+                  <p className="text-sky-100 text-sm mb-5">All perks are active on your account.</p>
+                  <button
+                    onClick={handleUnsubscribe}
+                    disabled={loading}
+                    className="text-xs text-sky-200 hover:text-white underline transition-colors"
+                  >
+                    {loading ? 'Cancelling…' : 'Cancel subscription'}
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 p-6 text-white">
+                  <div className="flex items-center gap-3 mb-1">
+                    <Sparkles size={22} />
+                    <span className="text-lg font-bold">Super Domi</span>
+                  </div>
+                  <p className="text-sky-100 text-sm mb-1">Unlock exclusive perks for serious domis.</p>
+                  <p className="text-3xl font-bold mt-3 mb-1">$4.99<span className="text-base font-normal text-sky-200">/month</span></p>
+                  <p className="text-xs text-sky-200 mb-5">Cancel anytime.</p>
+                  <Button
+                    onClick={handleSubscribe}
+                    disabled={loading}
+                    className="w-full bg-white text-sky-600 hover:bg-sky-50 font-semibold"
+                  >
+                    {loading ? 'Activating…' : 'Subscribe — $4.99/mo'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Perks list */}
+              <Card className="p-6">
+                <h3 className="mb-4 font-semibold">What you get</h3>
+                <div className="space-y-4">
+                  {SUPER_DOMI_FEATURES.map(({ icon: Icon, label, desc }) => (
+                    <div key={label} className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isSuperDomi ? 'bg-sky-100 text-sky-600' : 'bg-gray-100 text-gray-500'}`}>
+                        <Icon size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                      </div>
+                      {isSuperDomi && (
+                        <Check size={15} className="ml-auto text-sky-500 flex-shrink-0 mt-0.5" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* Revenue rationale card */}
+              <Card className="p-5 bg-amber-50 border-amber-200">
+                <div className="flex items-start gap-3">
+                  <div className="text-xl">💡</div>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900 mb-1">Is it worth it?</p>
+                    <p className="text-xs text-amber-700">
+                      A domi completing 4 tasks/week at 25 tokens each earns ~400 tokens/month.
+                      The +15% bonus alone adds 60 extra tokens (~$6 in gift card value) — more than covering the $4.99 subscription.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
