@@ -268,9 +268,9 @@ export default function PostTask() {
         <div className="mb-8">
           <Button variant="ghost" onClick={goBack} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {step === 0 ? 'Back to Feed' : 'Back'}
+            {step === 0 ? 'Back to Doum' : 'Back'}
           </Button>
-          <h1 className="text-2xl font-bold">Post a Task</h1>
+          <h1 className="text-2xl font-bold">Ask for Help</h1>
           <p className="text-muted-foreground mt-2">Get help from fellow students</p>
         </div>
 
@@ -606,7 +606,7 @@ export default function PostTask() {
                       <Zap size={14} className="text-amber-500" />
                       Boost listing (+10 tokens)
                     </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Pins your task to the top of the feed</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Pins your doum to the top</p>
                   </div>
                   <Switch
                     id="boost"
@@ -673,10 +673,10 @@ export default function PostTask() {
                   : loading
                     ? 'Posting...'
                     : isDevMode
-                      ? 'Post Task (Dev — no tokens deducted)'
+                      ? 'Request Doum (Dev — no tokens deducted)'
                       : !canAfford
                         ? 'Insufficient tokens'
-                        : `Post Task (−${totalCost} tokens)`}
+                        : `Request Doum (−${totalCost} tokens)`}
               </Button>
             )}
           </div>

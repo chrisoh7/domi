@@ -25,12 +25,22 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchProfile(userId) {
+  async function fetchProfile(userId, attempt = 0) {
     const { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
+    if (!data) {
+      if (attempt < 5) {
+        // Trigger may not have fired yet — retry with backoff
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+        return fetchProfile(userId, attempt + 1)
+      }
+      // Still no profile after retries (DB wiped etc.) — sign out
+      await supabase.auth.signOut()
+      return
+    }
     setProfile(data)
     setLoading(false)
   }

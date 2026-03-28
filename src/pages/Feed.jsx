@@ -122,8 +122,8 @@ export default function Feed() {
 
         {/* Page header */}
         <div className="mb-6">
-          <h1 className="mb-2">Task Feed</h1>
-          <p className="text-muted-foreground">Browse open tasks from students around campus</p>
+          <h1 className="mb-2">Doum</h1>
+          <p className="text-muted-foreground">Browse open doums from students around campus</p>
         </div>
 
         {/* Search + filter toggle row */}
@@ -132,7 +132,7 @@ export default function Feed() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search tasks..."
+              placeholder="Search doums..."
               value={filters.search}
               onChange={e => set('search', e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white"
@@ -226,7 +226,7 @@ export default function Feed() {
         {/* Results count */}
         {!loading && (
           <p className="text-xs text-muted-foreground mb-3">
-            {displayed.length} task{displayed.length !== 1 ? 's' : ''} found
+            {displayed.length} doum{displayed.length !== 1 ? 's' : ''} found
           </p>
         )}
 
@@ -238,11 +238,11 @@ export default function Feed() {
         ) : displayed.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">🔍</div>
-            <h2 className="mb-2">No tasks found</h2>
+            <h2 className="mb-2">No doums found</h2>
             <p className="text-muted-foreground mb-6">
               {isFiltered
-                ? 'Try adjusting your filters or clear them to see all tasks.'
-                : 'Be the first to post a task for students to help with!'}
+                ? 'Try adjusting your filters or clear them to see all doums.'
+                : 'Be the first to post a doum — nearby domi\'s are ready to help!'}
             </p>
             <div className="flex items-center justify-center gap-3">
               {isFiltered && (
@@ -251,7 +251,7 @@ export default function Feed() {
                 </Button>
               )}
               <Button asChild className="bg-primary hover:bg-primary/90">
-                <Link to="/post">Post a Task</Link>
+                <Link to="/post">Request Doum</Link>
               </Button>
             </div>
           </div>

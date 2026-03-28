@@ -98,6 +98,7 @@ export default function Profile() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id)
       setProfile(p => ({ ...p, avatar_url: publicUrl }))
+      await refreshProfile()
     }
     setAvatarSaving(false)
     e.target.value = ''
@@ -106,6 +107,7 @@ export default function Profile() {
   async function removeAvatar() {
     await supabase.from('profiles').update({ avatar_url: null }).eq('id', user.id)
     setProfile(p => ({ ...p, avatar_url: null }))
+    await refreshProfile()
   }
 
   async function toggleAdmin() {

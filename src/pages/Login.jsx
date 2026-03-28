@@ -34,23 +34,19 @@ export default function Login() {
     setLoading(true)
 
     if (mode === 'signup') {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name || email.split('@')[0],
+            year: year || null,
+            major: major || null,
+          }
+        }
+      })
       if (signUpError) { setError(signUpError.message); setLoading(false); return }
 
-      if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: data.user.id,
-          email,
-          name: name || email.split('@')[0],
-          year: year || null,
-          major: major || null,
-          token_balance: 10,
-          reputation_score: null,
-          strikes: 0,
-          suspended: false,
-        })
-        if (profileError) { setError(profileError.message); setLoading(false); return }
-      }
       navigate('/feed')
     } else {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })

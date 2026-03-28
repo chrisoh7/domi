@@ -118,7 +118,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
             {/* Nav links */}
             <div className="hidden md:flex items-center gap-1 mr-1">
-              {navLink('/feed', 'Feed', LayoutGrid)}
+              {navLink('/feed', 'Doum', LayoutGrid)}
               {isAdmin && navLink('/admin', 'Admin', Shield)}
             </div>
 
@@ -129,7 +129,7 @@ export default function Navbar() {
               onClick={() => navigate('/post')}
             >
               <Plus size={15} />
-              Post Task
+              Request Doum
             </Button>
 
             {/* Token balance chip */}
@@ -230,7 +230,7 @@ export default function Navbar() {
                   <Avatar className="w-8 h-8">
                     <AvatarImage src={profile?.avatar_url} alt={profile?.full_name ?? 'User'} />
                     <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
-                      {profile?.full_name?.[0]?.toUpperCase() ?? 'U'}
+                      {profile?.name?.[0]?.toUpperCase() ?? '?'}
                     </AvatarFallback>
                   </Avatar>
                 </button>
@@ -260,7 +260,7 @@ export default function Navbar() {
           }`}
         >
           <LayoutGrid size={20} />
-          <span>Feed</span>
+          <span>Doum</span>
         </Link>
         <Link
           to="/post"
@@ -269,7 +269,7 @@ export default function Navbar() {
           }`}
         >
           <Plus size={20} />
-          <span>Post</span>
+          <span>Request Doum</span>
         </Link>
         {profile && (
           <Link
