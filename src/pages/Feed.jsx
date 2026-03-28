@@ -122,7 +122,7 @@ export default function Feed() {
 
         {/* Page header */}
         <div className="mb-6">
-          <h1 className="mb-2">Doum</h1>
+          <h1 className="mb-2">Doum Feed</h1>
           <p className="text-muted-foreground">Browse open doums from students around campus</p>
         </div>
 

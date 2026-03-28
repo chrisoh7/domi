@@ -59,7 +59,7 @@ export default function TaskChat({ taskId, posterId, runnerId }) {
       <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
         <MessageSquare size={14} className="text-gray-500" />
         <span className="text-sm font-semibold text-gray-700">Chat</span>
-        <span className="text-xs text-gray-400 ml-1">· poster & runner only</span>
+        <span className="text-xs text-gray-400 ml-1">· poster & domi only</span>
       </div>
 
       <div className="h-56 overflow-y-auto p-3 space-y-2 bg-white">
@@ -101,7 +101,7 @@ export default function TaskChat({ taskId, posterId, runnerId }) {
         </form>
       ) : (
         <p className="text-xs text-gray-400 text-center py-2.5 border-t border-gray-200">
-          Chat is only available to the poster and runner.
+          Chat is only available to the poster and domi.
         </p>
       )}
     </div>

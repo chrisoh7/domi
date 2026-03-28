@@ -103,10 +103,7 @@ export default function Navbar() {
 
           {/* Left: Logo */}
           <Link to="/feed" className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-2xl">👋</span>
-            </div>
-            <span className="text-2xl tracking-tight font-semibold">Domi</span>
+            <span className="text-primary font-bold text-xl tracking-tight">do</span><span className="text-[#1A1A2E] font-bold text-xl tracking-tight">mi</span>
             {isDevMode && (
               <span className="px-1.5 py-0.5 bg-amber-400 text-amber-900 text-[10px] font-bold rounded-full leading-none">
                 DEV

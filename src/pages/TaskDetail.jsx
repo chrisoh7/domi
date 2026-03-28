@@ -281,7 +281,7 @@ export default function TaskDetail() {
   async function fetchTask() {
     const [{ data }, { data: extra }] = await Promise.all([
       supabase.from('tasks_with_poster').select('*').eq('id', id).single(),
-      supabase.from('tasks').select('location_stops, delivery_type, cash_offer, marked_done_at, completion_photo_url').eq('id', id).single(),
+      supabase.from('tasks').select('location_stops, delivery_type, cash_offer, marked_done_at, completion_photo_url, requires_approval, subtasks').eq('id', id).single(),
     ])
     if (data) {
       setTask({
@@ -291,6 +291,8 @@ export default function TaskDetail() {
         cash_offer: extra?.cash_offer ?? null,
         marked_done_at: extra?.marked_done_at ?? null,
         completion_photo_url: extra?.completion_photo_url ?? null,
+        requires_approval: extra?.requires_approval ?? null,
+        subtasks: extra?.subtasks ?? null,
       })
       setPoster({ name: data.poster_name, rating: data.poster_rating, id: data.poster_id, avatar: data.poster_avatar_url })
       if (data.runner_id) {
@@ -518,10 +520,13 @@ export default function TaskDetail() {
                   task.status === 'open' ? 'bg-green-100 text-green-700' :
                   task.status === 'accepted' ? 'bg-blue-100 text-blue-700' :
                   task.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-700' :
+                  task.status === 'pending_runner_approval' ? 'bg-purple-100 text-purple-700' :
                   task.status === 'completed' ? 'bg-gray-100 text-gray-600' :
                   'bg-red-100 text-red-700'
                 }>
-                  {task.status === 'pending_confirmation' ? 'Awaiting Confirmation' : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                  {task.status === 'pending_confirmation' ? 'Awaiting Confirmation'
+                    : task.status === 'pending_runner_approval' ? 'Pending Approval'
+                    : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
                 </Badge>
                 {deliveryMeta && (() => {
                   const Icon = deliveryMeta.icon
@@ -533,6 +538,11 @@ export default function TaskDetail() {
                 })()}
                 {task.category && (
                   <Badge variant="outline">{task.category}</Badge>
+                )}
+                {task.requires_approval && (
+                  <Badge variant="outline" className="flex items-center gap-1 text-purple-600 bg-purple-50 border-purple-200">
+                    <UserCheck size={11} />Approval required
+                  </Badge>
                 )}
               </div>
 
@@ -600,13 +610,13 @@ export default function TaskDetail() {
 
                 {task.status === 'open' && !isPoster && (
                   <Button onClick={handleAccept} disabled={actionLoading} className="w-full bg-primary text-white hover:bg-primary/90">
-                    {actionLoading ? 'Accepting...' : 'Accept Task'}
+                    {actionLoading ? 'Accepting...' : 'Accept Doum'}
                   </Button>
                 )}
 
                 {task.status === 'pending_runner_approval' && isPoster && (
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground text-center"><span className="font-semibold text-foreground">{runner?.name ?? 'Someone'}</span> wants to run this task. Approve them?</p>
+                    <p className="text-sm text-muted-foreground text-center"><span className="font-semibold text-foreground">{runner?.name ?? 'Someone'}</span> wants to be the domi for this doum. Approve them?</p>
                     <div className="flex gap-3">
                       <Button variant="outline" onClick={handleRejectRunner} disabled={actionLoading} className="flex-1 border-red-300 text-red-600 hover:bg-red-50">
                         <XCircle size={16} className="mr-2" />Reject
@@ -673,7 +683,7 @@ export default function TaskDetail() {
 
                 {task.status === 'pending_confirmation' && isPoster && (
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground text-center">Your runner marked this task as done.</p>
+                    <p className="text-sm text-muted-foreground text-center">Your domi marked this doum as done.</p>
                     {escrowSecondsLeft !== null && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-2 mb-1">
@@ -681,7 +691,7 @@ export default function TaskDetail() {
                           <p className="text-xs text-amber-600 font-medium">Auto-confirms in</p>
                         </div>
                         <p className="text-lg font-bold text-amber-700 font-mono">{formatCountdown(escrowSecondsLeft)}</p>
-                        <p className="text-xs text-amber-500 mt-0.5">Runner receives {Math.floor(task.token_offer * 0.9)} tokens (10% platform fee)</p>
+                        <p className="text-xs text-amber-500 mt-0.5">Domi receives {Math.floor(task.token_offer * 0.9)} tokens (10% platform fee)</p>
                       </div>
                     )}
                     <div className="flex gap-3">
@@ -700,7 +710,7 @@ export default function TaskDetail() {
                 )}
 
                 {task.status === 'disputed' && (
-                  <div className="text-center py-2 text-sm text-red-500 bg-red-50 rounded-lg">This task is under admin review.</div>
+                  <div className="text-center py-2 text-sm text-red-500 bg-red-50 rounded-lg">This doum is under admin review.</div>
                 )}
 
                 {isDevMode && task.status !== 'completed' && task.status !== 'disputed' && (
@@ -711,7 +721,7 @@ export default function TaskDetail() {
                       </Button>
                     )}
                     <Button onClick={handleDevComplete} disabled={actionLoading} className="w-full bg-amber-500 text-white hover:bg-amber-600">
-                      <Wrench size={16} className="mr-2" />Dev: Force Complete Task
+                      <Wrench size={16} className="mr-2" />Dev: Force Complete Doum
                     </Button>
                   </div>
                 )}
@@ -726,7 +736,7 @@ export default function TaskDetail() {
                     </DialogTrigger>
                     <DialogContent className="max-w-lg">
                       <DialogHeader>
-                        <DialogTitle>Task Chat</DialogTitle>
+                        <DialogTitle>Doum Chat</DialogTitle>
                       </DialogHeader>
                       <TaskChat taskId={id} posterId={task.poster_id} runnerId={task.runner_id} />
                     </DialogContent>
@@ -741,7 +751,7 @@ export default function TaskDetail() {
                 )}
                 {isPoster && runner?.id && runner.id !== user?.id && (
                   <Button variant="ghost" size="sm" onClick={() => setReportTarget({ id: runner.id, name: runner.name, taskId: id })} className="w-full text-muted-foreground hover:text-red-500">
-                    <Flag size={14} className="mr-1" />Report Runner
+                    <Flag size={14} className="mr-1" />Report Domi
                   </Button>
                 )}
 
@@ -793,7 +803,7 @@ export default function TaskDetail() {
             {/* Runner */}
             {runner && (
               <Card className="p-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Helper</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Domi</p>
                 <div className="flex items-center gap-3">
                   <Avatar className="w-12 h-12">
                     {runner.avatar_url ? <AvatarImage src={runner.avatar_url} alt={runner.name} /> : null}

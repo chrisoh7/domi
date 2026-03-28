@@ -315,9 +315,9 @@ export default function TokenShop() {
                 <div>
                   <h3 className="mb-2">How It Works</h3>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    <li>• Purchase tokens to offer as rewards for tasks</li>
+                    <li>• Purchase tokens to offer as rewards for doums</li>
                     <li>• Higher token rewards attract more helpers</li>
-                    <li>• Tokens are held in escrow until task completion</li>
+                    <li>• Tokens are held in escrow until doum completion</li>
                     <li>• Unused tokens never expire</li>
                   </ul>
                 </div>

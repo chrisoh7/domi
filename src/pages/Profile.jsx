@@ -190,7 +190,7 @@ export default function Profile() {
                   </span>
                   <span className="text-sm">({ratings.length} ratings)</span>
                 </div>
-                <span className="text-sm text-muted-foreground">{completedTasks.length} tasks completed</span>
+                <span className="text-sm text-muted-foreground">{completedTasks.length} doums completed</span>
 
                 {profile.reputation_score !== null && profile.reputation_score < 3.5 && (
                   <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
@@ -267,15 +267,15 @@ export default function Profile() {
           <Card className="p-4 border-2 border-green-200">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
               <CheckCircle size={13} className="text-green-500" />
-              Tasks Completed
+              Doums Completed
             </p>
             <p className="text-2xl font-bold text-green-500">{completedTasks.length}</p>
           </Card>
         </div>
 
-        {/* Task History with Tabs */}
+        {/* Doum History with Tabs */}
         <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-6">Task History</h2>
+          <h2 className="text-xl font-semibold mb-6">Doum History</h2>
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className={`grid w-full mb-6 ${isOwn ? 'grid-cols-5' : 'grid-cols-4'}`}>
               {tabs.map(({ key, label, icon: Icon }) => (
@@ -370,10 +370,10 @@ function TrendsTab({ postedTasks, completedTasks }) {
     <div className="space-y-4">
       {/* Summary stat cards */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard value={postedTasks.length} label="Tasks Posted" />
-        <StatCard value={completedTasks.length} label="Tasks Run" />
+        <StatCard value={postedTasks.length} label="Doums Posted" />
+        <StatCard value={completedTasks.length} label="Doums Run" />
         <StatCard
-          value={postedTasks.length >= completedTasks.length ? 'Poster' : 'Runner'}
+          value={postedTasks.length >= completedTasks.length ? 'Poster' : 'Domi'}
           label="Usual Role"
         />
       </div>
@@ -382,7 +382,7 @@ function TrendsTab({ postedTasks, completedTasks }) {
       {hasPosted && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Tasks You Posted</h3>
+            <h3 className="text-sm font-semibold">Doums You Posted</h3>
             <span className="text-xs text-muted-foreground">Top: {CAT_META[topPostedCat]?.emoji} {topPostedCat}</span>
           </div>
           <div className="space-y-2.5">
@@ -411,7 +411,7 @@ function TrendsTab({ postedTasks, completedTasks }) {
       {hasRun && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Tasks You Ran</h3>
+            <h3 className="text-sm font-semibold">Doums You Ran</h3>
             <span className="text-xs text-muted-foreground">Top: {CAT_META[topRunCat]?.emoji} {topRunCat}</span>
           </div>
           <div className="space-y-2.5">

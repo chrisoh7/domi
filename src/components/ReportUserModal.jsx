@@ -5,7 +5,7 @@ import { X, Flag, CheckCircle } from 'lucide-react'
 
 const REASONS = [
   'No-show / ghosted',
-  'Fraudulent task or listing',
+  'Fraudulent doum or listing',
   'Harassment or threats',
   'Trying to game the token system',
   'Fake profile',
